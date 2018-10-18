@@ -1,0 +1,31 @@
+{
+  "MongoUrl": "mongodb://mongo",
+  "MongoTable": "connectionlog",
+  "ConnectorGatewayCollection": "connector_gateway",
+  "ConnectorDeviceCollection": "connector_device",
+  "DeviceStateCollection": "devicestate",
+  "GatewayStateCollection": "gatewaystate",
+
+  "ServerPort": "8080",
+  "LogLevel": "CALL",
+
+  "ForceUser": "true",
+  "ForceAuth": "true",
+
+  "PermissionsUrl": "http://permissionsearch:8080",
+
+  "AmqpUrl": "amqp://user:pw@rabbitmq:5672/",
+  "AmqpReconnectTimeout": 10,
+  "AmqpConsumerName": "connectionlog",
+  "AmqpMsgLogging": "false",
+
+  "ConnectorLogTopic": "connector_log",
+  "DeviceLogTopic": "device_log",
+  "GatewayLogTopic": "gateway_log",
+
+  "InfluxdbUrl": "http://influxdb:8086",
+  "InfluxdbDb": "connectionlog",
+  "InfluxdbUser": "",
+  "InfluxdbPw": "",
+  "InfluxdbTimeout": 3
+}
