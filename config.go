@@ -37,7 +37,6 @@ type ConfigStruct struct {
 
 	ServerPort     string
 	LogLevel       string
-	PermissionsUrl string
 
 	AmqpUrl              string
 	AmqpReconnectTimeout int64

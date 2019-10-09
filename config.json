@@ -12,8 +12,6 @@
   "ForceUser": "true",
   "ForceAuth": "true",
 
-  "PermissionsUrl": "http://permissionsearch:8080",
-
   "AmqpUrl": "amqp://user:pw@rabbitmq:5672/",
   "AmqpReconnectTimeout": 10,
   "AmqpConsumerName": "connectionlog",
