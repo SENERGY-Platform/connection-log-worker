@@ -1,5 +1,5 @@
 /*
- * Copyright 2018 InfAI (CC SES)
+ * Copyright 2019 InfAI (CC SES)
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -14,47 +14,43 @@
  * limitations under the License.
  */
 
-package main
+package controller
 
 import (
+	"github.com/SmartEnergyPlatform/connection-log-worker/lib/model"
 	"log"
-	"sync"
 
 	"time"
 
 	"github.com/influxdata/influxdb/client/v2"
 )
 
-var influxdbInstance client.Client
-var influxdbOnce sync.Once
-
-func getInfluxDb() client.Client {
-	influxdbOnce.Do(func() {
+func (this *Controller) getInfluxDb() client.Client {
+	this.influxdbOnce.Do(func() {
 		var err error
-		influxdbInstance, err = client.NewHTTPClient(client.HTTPConfig{
-			Addr:     Config.InfluxdbUrl,
-			Username: Config.InfluxdbUser,
-			Password: Config.InfluxdbPw,
-			Timeout:  time.Duration(Config.InfluxdbTimeout) * time.Second,
+		this.influxdbInstance, err = client.NewHTTPClient(client.HTTPConfig{
+			Addr:     this.config.InfluxdbUrl,
+			Username: this.config.InfluxdbUser,
+			Password: this.config.InfluxdbPw,
+			Timeout:  time.Duration(this.config.InfluxdbTimeout) * time.Second,
 		})
 		if err != nil {
 			log.Fatal("unable to instantiate InfluxDB", err)
 		}
 	})
-	return influxdbInstance
+	return this.influxdbInstance
 }
 
-func logDeviceHistory(deviceLog DeviceLog) (err error) {
+func (this *Controller) logDeviceHistory(deviceLog model.DeviceLog) (err error) {
 	bp, err := client.NewBatchPoints(client.BatchPointsConfig{
-		Database:  Config.InfluxdbDb,
+		Database:  this.config.InfluxdbDb,
 		Precision: "s",
 	})
 	if err != nil {
 		return err
 	}
 	tags := map[string]string{
-		"device":    deviceLog.Device,
-		"connector": deviceLog.Connector,
+		"device": deviceLog.Id,
 	}
 	fields := map[string]interface{}{
 		"connected": deviceLog.Connected,
@@ -69,20 +65,19 @@ func logDeviceHistory(deviceLog DeviceLog) (err error) {
 		return err
 	}
 	bp.AddPoint(pt)
-	return getInfluxDb().Write(bp)
+	return this.getInfluxDb().Write(bp)
 }
 
-func logGatewayHistory(gatewayLog GatewayLog) error {
+func (this *Controller) logGatewayHistory(gatewayLog model.HubLog) error {
 	bp, err := client.NewBatchPoints(client.BatchPointsConfig{
-		Database:  Config.InfluxdbDb,
+		Database:  this.config.InfluxdbDb,
 		Precision: "s",
 	})
 	if err != nil {
 		return err
 	}
 	tags := map[string]string{
-		"gateway":   gatewayLog.Gateway,
-		"connector": gatewayLog.Connector,
+		"gateway": gatewayLog.Id,
 	}
 	fields := map[string]interface{}{
 		"connected": gatewayLog.Connected,
@@ -97,32 +92,5 @@ func logGatewayHistory(gatewayLog GatewayLog) error {
 		return err
 	}
 	bp.AddPoint(pt)
-	return getInfluxDb().Write(bp)
-}
-
-func logConnectorHistory(connectorLog ConnectorLog) error {
-	bp, err := client.NewBatchPoints(client.BatchPointsConfig{
-		Database:  Config.InfluxdbDb,
-		Precision: "s",
-	})
-	if err != nil {
-		return err
-	}
-	tags := map[string]string{
-		"connector": connectorLog.Connector,
-	}
-	fields := map[string]interface{}{
-		"connected": connectorLog.Connected,
-	}
-	pt, err := client.NewPoint(
-		"connector",
-		tags,
-		fields,
-		connectorLog.Time,
-	)
-	if err != nil {
-		return err
-	}
-	bp.AddPoint(pt)
-	return getInfluxDb().Write(bp)
+	return this.getInfluxDb().Write(bp)
 }

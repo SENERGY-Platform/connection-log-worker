@@ -1,5 +1,5 @@
 /*
- * Copyright 2018 InfAI (CC SES)
+ * Copyright 2019 InfAI (CC SES)
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -14,7 +14,7 @@
  * limitations under the License.
  */
 
-package main
+package config
 
 import (
 	"encoding/json"
@@ -27,21 +27,14 @@ import (
 	"strings"
 )
 
-type ConfigStruct struct {
-	MongoUrl                   string
-	MongoTable                 string
-	ConnectorGatewayCollection string
-	ConnectorDeviceCollection  string
-	DeviceStateCollection      string
-	GatewayStateCollection     string
+type Config struct {
+	MongoUrl              string
+	MongoTable            string
+	DeviceStateCollection string
+	HubStateCollection    string
 
-	ServerPort     string
-	LogLevel       string
-
-	AmqpUrl              string
-	AmqpReconnectTimeout int64
-	AmqpConsumerName     string
-	AmqpMsgLogging	     string
+	ServerPort string
+	LogLevel   string
 
 	InfluxdbUrl     string
 	InfluxdbDb      string
@@ -49,39 +42,32 @@ type ConfigStruct struct {
 	InfluxdbPw      string
 	InfluxdbTimeout int64
 
-	ConnectorLogTopic string
 	DeviceLogTopic    string
-	GatewayLogTopic   string
+	HubLogTopic   string
 
 	ForceUser string
 	ForceAuth string
+
+	ZookeeperUrl string
+	KafkaGroupId string
+	Debug        bool
 }
 
-type ConfigType *ConfigStruct
-
-var Config ConfigType
-
-func LoadConfig(location string) error {
+//loads config from json in location and used environment variables (e.g ZookeeperUrl --> ZOOKEEPER_URL)
+func Load(location string) (config Config, err error) {
 	file, error := os.Open(location)
 	if error != nil {
 		log.Println("error on config load: ", error)
-		return error
+		return config, error
 	}
 	decoder := json.NewDecoder(file)
-	configuration := ConfigStruct{}
-	error = decoder.Decode(&configuration)
+	error = decoder.Decode(&config)
 	if error != nil {
 		log.Println("invalid config json: ", error)
-		return error
+		return config, error
 	}
-	HandleEnvironmentVars(&configuration)
-	HandleDefaultValues(&configuration)
-	Config = &configuration
-	return nil
-}
-
-func HandleDefaultValues(config ConfigType) {
-
+	handleEnvironmentVars(&config)
+	return config, nil
 }
 
 var camel = regexp.MustCompile("(^[^A-Z]*|[A-Z]*)([A-Z][^A-Z]+|$)")
@@ -100,7 +86,7 @@ func fieldNameToEnvName(s string) string {
 }
 
 // preparations for docker
-func HandleEnvironmentVars(config ConfigType) {
+func handleEnvironmentVars(config *Config) {
 	configValue := reflect.Indirect(reflect.ValueOf(config))
 	configType := configValue.Type()
 	for index := 0; index < configType.NumField(); index++ {
@@ -116,12 +102,30 @@ func HandleEnvironmentVars(config ConfigType) {
 			if configValue.FieldByName(fieldName).Kind() == reflect.String {
 				configValue.FieldByName(fieldName).SetString(envValue)
 			}
+			if configValue.FieldByName(fieldName).Kind() == reflect.Bool {
+				b, _ := strconv.ParseBool(envValue)
+				configValue.FieldByName(fieldName).SetBool(b)
+			}
+			if configValue.FieldByName(fieldName).Kind() == reflect.Float64 {
+				f, _ := strconv.ParseFloat(envValue, 64)
+				configValue.FieldByName(fieldName).SetFloat(f)
+			}
 			if configValue.FieldByName(fieldName).Kind() == reflect.Slice {
 				val := []string{}
 				for _, element := range strings.Split(envValue, ",") {
 					val = append(val, strings.TrimSpace(element))
 				}
 				configValue.FieldByName(fieldName).Set(reflect.ValueOf(val))
+			}
+			if configValue.FieldByName(fieldName).Kind() == reflect.Map {
+				value := map[string]string{}
+				for _, element := range strings.Split(envValue, ",") {
+					keyVal := strings.Split(element, ":")
+					key := strings.TrimSpace(keyVal[0])
+					val := strings.TrimSpace(keyVal[1])
+					value[key] = val
+				}
+				configValue.FieldByName(fieldName).Set(reflect.ValueOf(value))
 			}
 		}
 	}

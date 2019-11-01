@@ -14,36 +14,15 @@
  * limitations under the License.
  */
 
-package main
+package lib
 
 import (
 	"context"
-	"flag"
-	"github.com/SmartEnergyPlatform/connection-log-worker/lib"
 	"github.com/SmartEnergyPlatform/connection-log-worker/lib/config"
+	"github.com/SmartEnergyPlatform/connection-log-worker/lib/controller"
 	"github.com/SmartEnergyPlatform/connection-log-worker/lib/source/consumer"
-	"log"
-	"os"
-	"os/signal"
-	"syscall"
 )
 
-func main() {
-	configLocation := flag.String("config", "config.json", "configuration file")
-	flag.Parse()
-
-	conf, err := config.Load(*configLocation)
-	if err != nil {
-		log.Fatal(err)
-	}
-
-	ctx := context.Background() //no desire to cancel or stop running program; for tests you can use context.WithCancel(context.Background())
-	lib.Start(ctx, conf, func(err error, consumer *consumer.Consumer) {
-		log.Fatal("FATAL ERROR:", err)
-	})
-
-	shutdown := make(chan os.Signal, 1)
-	signal.Notify(shutdown, syscall.SIGINT, syscall.SIGTERM, syscall.SIGKILL)
-	sig := <-shutdown
-	log.Println("received shutdown signal", sig)
+func Start(ctx context.Context, config config.Config, runtimeErrorHandler func(err error, consumer *consumer.Consumer)) error {
+	return consumer.Start(ctx, config, controller.New(config), runtimeErrorHandler)
 }
