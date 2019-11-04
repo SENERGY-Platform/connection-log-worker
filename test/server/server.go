@@ -28,7 +28,7 @@ import (
 	"strconv"
 )
 
-func New(parentCtx context.Context, defaults config.Config) (config config.Config, connectionlogurl string, err error) {
+func New(parentCtx context.Context, defaults config.Config) (config config.Config, connectionlogip string, err error) {
 	config = defaults
 	ctx, cancel := context.WithCancel(parentCtx)
 
@@ -96,7 +96,7 @@ func New(parentCtx context.Context, defaults config.Config) (config config.Confi
 	}
 	permissionUrl := "http://" + permIp + ":8080"
 
-	_, connectionlogurl, err = Connectionlog(pool, ctx, config.MongoUrl, permissionUrl, config.InfluxdbUrl)
+	_, connectionlogip, err = Connectionlog(pool, ctx, config.MongoUrl, permissionUrl, config.InfluxdbUrl)
 	if err != nil {
 		log.Println("ERROR:", err)
 		debug.PrintStack()
@@ -104,7 +104,7 @@ func New(parentCtx context.Context, defaults config.Config) (config config.Confi
 		return config, "", err
 	}
 
-	return config, connectionlogurl, nil
+	return config, connectionlogip, nil
 }
 
 func Dockerlog(pool *dockertest.Pool, ctx context.Context, repo *dockertest.Resource, name string) {
