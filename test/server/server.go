@@ -72,7 +72,7 @@ func New(parentCtx context.Context, defaults config.Config) (config config.Confi
 		cancel()
 		return config, "", err
 	}
-	config.InfluxdbDb = "http://" + influxip + ":8086"
+	config.InfluxdbUrl = "http://" + influxip + ":8086"
 	config.InfluxdbDb = "connectionlog"
 	config.InfluxdbUser = "user"
 	config.InfluxdbPw = "pw"

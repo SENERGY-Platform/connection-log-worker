@@ -1,7 +1,9 @@
 module github.com/SENERGY-Platform/connection-log-worker
 
 require (
+	github.com/SENERGY-Platform/device-manager v0.0.0-20190903115329-50b962ed9d01 // indirect
 	github.com/SENERGY-Platform/mqtt-platform-connector v0.0.0-20191024065441-9c1eeeb252fd
+	github.com/SENERGY-Platform/platform-connector-lib v0.0.0-20190724063317-f63f04f4269d
 	github.com/bradfitz/gomemcache v0.0.0-20180710155616-bc664df96737
 	github.com/dgrijalva/jwt-go v3.2.0+incompatible
 	github.com/influxdata/influxdb v1.5.2
