@@ -18,8 +18,8 @@ package consumer
 
 import (
 	"context"
-	"github.com/SmartEnergyPlatform/connection-log-worker/lib/config"
-	"github.com/SmartEnergyPlatform/connection-log-worker/lib/source/consumer/listener"
+	"github.com/SENERGY-Platform/connection-log-worker/lib/config"
+	"github.com/SENERGY-Platform/connection-log-worker/lib/source/consumer/listener"
 	"log"
 )
 

@@ -14,15 +14,44 @@
  * limitations under the License.
  */
 
-package lib
+package test
 
 import (
 	"context"
+	"github.com/SENERGY-Platform/connection-log-worker/lib"
 	"github.com/SENERGY-Platform/connection-log-worker/lib/config"
-	"github.com/SENERGY-Platform/connection-log-worker/lib/controller"
 	"github.com/SENERGY-Platform/connection-log-worker/lib/source/consumer"
+	"github.com/SENERGY-Platform/connection-log-worker/test/server"
+	"log"
+	"testing"
+	"time"
 )
 
-func Start(ctx context.Context, config config.Config, runtimeErrorHandler func(err error, consumer *consumer.Consumer)) error {
-	return consumer.Start(ctx, config, controller.New(config), runtimeErrorHandler)
+func TestInit(t *testing.T) {
+	defaultConfig, err := config.Load("../config.json")
+	if err != nil {
+		t.Error(err)
+		return
+	}
+
+	ctx, cancel := context.WithCancel(context.Background())
+	defer time.Sleep(10 * time.Second) //wait for docker cleanup
+	defer cancel()
+
+	config, connectionlog, err := server.New(ctx, defaultConfig)
+	if err != nil {
+		t.Error(err)
+		return
+	}
+
+	err = lib.Start(ctx, config, func(err error, consumer *consumer.Consumer) {
+		t.Error(err)
+		return
+	})
+	if err != nil {
+		t.Error(err)
+		return
+	}
+
+	log.Println(connectionlog)
 }

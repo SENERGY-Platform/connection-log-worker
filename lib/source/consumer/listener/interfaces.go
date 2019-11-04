@@ -17,7 +17,7 @@
 package listener
 
 import (
-	"github.com/SmartEnergyPlatform/connection-log-worker/lib/model"
+	"github.com/SENERGY-Platform/connection-log-worker/lib/model"
 )
 
 type Controller interface {

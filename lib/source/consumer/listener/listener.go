@@ -17,7 +17,7 @@
 package listener
 
 import (
-	"github.com/SmartEnergyPlatform/connection-log-worker/lib/config"
+	"github.com/SENERGY-Platform/connection-log-worker/lib/config"
 )
 
 type Listener func(msg []byte) (err error)

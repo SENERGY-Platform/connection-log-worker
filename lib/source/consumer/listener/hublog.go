@@ -18,8 +18,8 @@ package listener
 
 import (
 	"encoding/json"
-	"github.com/SmartEnergyPlatform/connection-log-worker/lib/config"
-	"github.com/SmartEnergyPlatform/connection-log-worker/lib/model"
+	"github.com/SENERGY-Platform/connection-log-worker/lib/config"
+	"github.com/SENERGY-Platform/connection-log-worker/lib/model"
 )
 
 func init() {

@@ -19,9 +19,9 @@ package main
 import (
 	"context"
 	"flag"
-	"github.com/SmartEnergyPlatform/connection-log-worker/lib"
-	"github.com/SmartEnergyPlatform/connection-log-worker/lib/config"
-	"github.com/SmartEnergyPlatform/connection-log-worker/lib/source/consumer"
+	"github.com/SENERGY-Platform/connection-log-worker/lib"
+	"github.com/SENERGY-Platform/connection-log-worker/lib/config"
+	"github.com/SENERGY-Platform/connection-log-worker/lib/source/consumer"
 	"log"
 	"os"
 	"os/signal"
@@ -38,9 +38,12 @@ func main() {
 	}
 
 	ctx := context.Background() //no desire to cancel or stop running program; for tests you can use context.WithCancel(context.Background())
-	lib.Start(ctx, conf, func(err error, consumer *consumer.Consumer) {
+	err = lib.Start(ctx, conf, func(err error, consumer *consumer.Consumer) {
 		log.Fatal("FATAL ERROR:", err)
 	})
+	if err != nil {
+		log.Fatal("FATAL error:", err)
+	}
 
 	shutdown := make(chan os.Signal, 1)
 	signal.Notify(shutdown, syscall.SIGINT, syscall.SIGTERM, syscall.SIGKILL)
