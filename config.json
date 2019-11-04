@@ -10,7 +10,6 @@
   "ForceUser": "true",
   "ForceAuth": "true",
 
-  "ConnectorLogTopic": "connector_log",
   "DeviceLogTopic": "device_log",
   "HubLogTopic": "gateway_log",
 

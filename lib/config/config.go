@@ -42,8 +42,8 @@ type Config struct {
 	InfluxdbPw      string
 	InfluxdbTimeout int64
 
-	DeviceLogTopic    string
-	HubLogTopic   string
+	DeviceLogTopic string
+	HubLogTopic    string
 
 	ForceUser string
 	ForceAuth string
