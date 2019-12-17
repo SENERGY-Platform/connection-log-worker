@@ -1,5 +1,7 @@
 module github.com/SENERGY-Platform/connection-log-worker
 
+go 1.13
+
 require (
 	github.com/SENERGY-Platform/platform-connector-lib v0.0.0-20190724063317-f63f04f4269d
 	github.com/cenkalti/backoff v2.1.1+incompatible // indirect
