@@ -4,12 +4,6 @@
   "DeviceStateCollection": "devicestate",
   "HubStateCollection": "gatewaystate",
 
-  "ServerPort": "8080",
-  "LogLevel": "CALL",
-
-  "ForceUser": "true",
-  "ForceAuth": "true",
-
   "DeviceLogTopic": "device_log",
   "HubLogTopic": "gateway_log",
 
@@ -19,5 +13,7 @@
   "InfluxdbPw": "",
   "InfluxdbTimeout": 3,
 
-  "ZookeeperUrl": "zk"
+  "ZookeeperUrl": "zk",
+
+  "Debug": true
 }

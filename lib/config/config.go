@@ -33,9 +33,6 @@ type Config struct {
 	DeviceStateCollection string
 	HubStateCollection    string
 
-	ServerPort string
-	LogLevel   string
-
 	InfluxdbUrl     string
 	InfluxdbDb      string
 	InfluxdbUser    string
@@ -44,9 +41,6 @@ type Config struct {
 
 	DeviceLogTopic string
 	HubLogTopic    string
-
-	ForceUser string
-	ForceAuth string
 
 	ZookeeperUrl string
 	KafkaGroupId string
