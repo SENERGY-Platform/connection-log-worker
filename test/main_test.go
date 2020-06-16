@@ -25,8 +25,9 @@ import (
 	"github.com/SENERGY-Platform/connection-log-worker/lib/source/consumer"
 	"github.com/SENERGY-Platform/connection-log-worker/test/helper"
 	"github.com/SENERGY-Platform/connection-log-worker/test/server"
+	"github.com/influxdata/influxdb/client/v2"
+	uuid2 "github.com/satori/go.uuid"
 	"github.com/segmentio/kafka-go"
-
 	"log"
 	"testing"
 	"time"
@@ -90,95 +91,139 @@ func Test(t *testing.T) {
 		return
 	}
 
-	var deviceId string
-	var hubId string
+	t.Run("check repeating state true", testStateUpdate(config, connectionlog, true, false))
+	t.Run("check repeating state false", testStateUpdate(config, connectionlog, false, false))
 
-	t.Run("create device", func(t *testing.T) {
-		deviceId = createDevice(t, config.ZookeeperUrl)
-	})
-
-	t.Run("create hub", func(t *testing.T) {
-		hubId = createHub(t, config.ZookeeperUrl)
-	})
-
-	t.Run("send device log", func(t *testing.T) {
-		sendLog(t, config.ZookeeperUrl, config.DeviceLogTopic, true, deviceId)
-	})
-
-	t.Run("send hub log", func(t *testing.T) {
-		sendLog(t, config.ZookeeperUrl, config.HubLogTopic, true, hubId)
-	})
-
-	time.Sleep(10 * time.Second)
-
-	t.Run("send device log", func(t *testing.T) {
-		checkDeviceLog(t, connectionlog, deviceId)
-	})
-
-	t.Run("send hub log", func(t *testing.T) {
-		checkHubLog(t, connectionlog, hubId)
-	})
-
+	t.Run("check alternating state true", testStateUpdate(config, connectionlog, true, true))
+	t.Run("check alternating state false", testStateUpdate(config, connectionlog, false, true))
 }
 
-func checkDeviceLog(t *testing.T, connectionlogUrl string, id string) {
+func testStateUpdate(config config.Config, connectionlog string, initialState bool, alternating bool) func(t *testing.T) {
+	return func(t *testing.T) {
+		var state bool = initialState
+		var deviceId string
+		var hubId string
+		var count = 1
+
+		t.Run("create device", func(t *testing.T) {
+			deviceId = createDevice(t, config.ZookeeperUrl)
+		})
+
+		t.Run("create hub", func(t *testing.T) {
+			hubId = createHub(t, config.ZookeeperUrl)
+		})
+
+		time.Sleep(10 * time.Second)
+
+		t.Run("send device log", func(t *testing.T) {
+			sendLog(t, config.ZookeeperUrl, config.DeviceLogTopic, state, deviceId)
+		})
+
+		t.Run("send hub log", func(t *testing.T) {
+			sendLog(t, config.ZookeeperUrl, config.HubLogTopic, state, hubId)
+		})
+
+		if alternating {
+			state = !state
+			count = 2
+		}
+
+		t.Run("send device log 2", func(t *testing.T) {
+			sendLog(t, config.ZookeeperUrl, config.DeviceLogTopic, state, deviceId)
+		})
+
+		t.Run("send hub log 2", func(t *testing.T) {
+			sendLog(t, config.ZookeeperUrl, config.HubLogTopic, state, hubId)
+		})
+
+		time.Sleep(10 * time.Second)
+
+		t.Run("check device log", func(t *testing.T) {
+			checkDeviceLog(t, connectionlog, deviceId, state, count)
+		})
+
+		t.Run("check hub log", func(t *testing.T) {
+			checkHubLog(t, connectionlog, hubId, state, count)
+		})
+	}
+}
+
+func checkDeviceLog(t *testing.T, connectionlogUrl string, id string, state bool, count int) {
 	t.Run("check device state", func(t *testing.T) {
-		checkDeviceState(t, connectionlogUrl, id)
+		checkDeviceState(t, connectionlogUrl, id, state)
 	})
 	t.Run("check device history", func(t *testing.T) {
-		checkDeviceHistory(t, connectionlogUrl, id)
+		checkDeviceHistory(t, connectionlogUrl, id, count)
 	})
 }
 
-func checkDeviceHistory(t *testing.T, connectionlogUrl string, id string) {
-	result := []interface{}{}
+func checkDeviceHistory(t *testing.T, connectionlogUrl string, id string, count int) {
+	result := []client.Result{}
 	err := helper.AdminPost(connectionlogUrl+"/intern/history/device/1h", []string{id}, &result)
 	if err != nil {
 		t.Fatal(err)
 	}
 	if len(result) != 1 {
-		t.Fatal(result)
+		t.Fatal(len(result), result)
+	}
+	if result[0].Err != "" {
+		t.Fatal(result[0].Err)
+	}
+	if len(result[0].Series) != 1 {
+		t.Fatal(len(result[0].Series), result[0].Series)
+	}
+	if len(result[0].Series[0].Values) != count {
+		t.Fatal(len(result[0].Series[0].Values), result[0].Series[0].Values)
 	}
 }
 
-func checkDeviceState(t *testing.T, connectionlogUrl string, id string) {
+func checkDeviceState(t *testing.T, connectionlogUrl string, id string, state bool) {
 	result := map[string]bool{}
 	err := helper.AdminPost(connectionlogUrl+"/intern/state/device/check", []string{id}, &result)
 	if err != nil {
 		t.Fatal(err)
 	}
-	if len(result) != 1 || result[id] != true {
-		t.Fatal(result)
+	if len(result) != 1 || result[id] != state {
+		t.Fatal(len(result), result)
 	}
 }
 
-func checkHubLog(t *testing.T, connectionlogUrl string, id string) {
+func checkHubLog(t *testing.T, connectionlogUrl string, id string, state bool, count int) {
 	t.Run("check hub state", func(t *testing.T) {
-		checkHubState(t, connectionlogUrl, id)
+		checkHubState(t, connectionlogUrl, id, state)
 	})
 	t.Run("check hub history", func(t *testing.T) {
-		checkHubHistory(t, connectionlogUrl, id)
+		checkHubHistory(t, connectionlogUrl, id, count)
 	})
 }
 
-func checkHubHistory(t *testing.T, connectionlogUrl string, id string) {
-	result := []interface{}{}
+func checkHubHistory(t *testing.T, connectionlogUrl string, id string, count int) {
+	result := []client.Result{}
 	err := helper.AdminPost(connectionlogUrl+"/intern/history/gateway/1h", []string{id}, &result)
 	if err != nil {
 		t.Fatal(err)
 	}
 	if len(result) != 1 {
-		t.Fatal(result)
+		t.Fatal(len(result), result)
+	}
+	if result[0].Err != "" {
+		t.Fatal(result[0].Err)
+	}
+	if len(result[0].Series) != 1 {
+		t.Fatal(len(result[0].Series), result[0].Series)
+	}
+	if len(result[0].Series[0].Values) != count {
+		t.Fatal(len(result[0].Series[0].Values), result[0].Series[0].Values)
 	}
 }
 
-func checkHubState(t *testing.T, connectionlogUrl string, id string) {
+func checkHubState(t *testing.T, connectionlogUrl string, id string, state bool) {
 	result := map[string]bool{}
 	err := helper.AdminPost(connectionlogUrl+"/intern/state/gateway/check", []string{id}, &result)
 	if err != nil {
 		t.Fatal(err)
 	}
-	if len(result) != 1 || result[id] != true {
+	if len(result) != 1 || result[id] != state {
 		t.Fatal(result)
 	}
 }
@@ -218,7 +263,8 @@ func sendLog(t *testing.T, zk string, topic string, state bool, id string) {
 	}
 }
 
-func createDevice(t *testing.T, zk string) string {
+func createDevice(t *testing.T, zk string) (id string) {
+	id = uuid2.NewV4().String()
 	broker, err := helper.GetBroker(zk)
 	if err != nil {
 		t.Fatal(err)
@@ -236,17 +282,18 @@ func createDevice(t *testing.T, zk string) string {
 		context.Background(),
 		kafka.Message{
 			Key:   []byte("cmd.Id"),
-			Value: []byte(`{"command":"PUT","id":"device-id","owner":"dd69ea0d-f553-4336-80f3-7f4567f85c7b","device":{"id":"device-id","local_id":"device-local-id","name":"device-name","device_type_id":"dt-id"}}`),
+			Value: []byte(`{"command":"PUT","id":"` + id + `","owner":"dd69ea0d-f553-4336-80f3-7f4567f85c7b","device":{"id":"` + id + `","local_id":"device-local-id","name":"device-name","device_type_id":"dt-id"}}`),
 			Time:  time.Now(),
 		},
 	)
 	if err != nil {
 		t.Fatal(err)
 	}
-	return "device-id"
+	return id
 }
 
-func createHub(t *testing.T, zk string) string {
+func createHub(t *testing.T, zk string) (id string) {
+	id = uuid2.NewV4().String()
 	broker, err := helper.GetBroker(zk)
 	if err != nil {
 		t.Fatal(err)
@@ -264,7 +311,7 @@ func createHub(t *testing.T, zk string) string {
 		context.Background(),
 		kafka.Message{
 			Key:   []byte("cmd.Id"),
-			Value: []byte(`{"command":"PUT","id":"hub-id","owner":"dd69ea0d-f553-4336-80f3-7f4567f85c7b","hub":{"id":"hub-id","name":"hub-name","hash":"hash-value","device_local_ids":["device-local-id"]}}`),
+			Value: []byte(`{"command":"PUT","id":"` + id + `","owner":"dd69ea0d-f553-4336-80f3-7f4567f85c7b","hub":{"id":"` + id + `","name":"hub-name","hash":"hash-value","device_local_ids":["device-local-id"]}}`),
 			Time:  time.Now(),
 		},
 	)
@@ -272,5 +319,5 @@ func createHub(t *testing.T, zk string) string {
 		t.Fatal(err)
 	}
 
-	return "hub-id"
+	return id
 }
