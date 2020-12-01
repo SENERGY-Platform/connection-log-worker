@@ -1,5 +1,5 @@
 /*
- * Copyright 2019 InfAI (CC SES)
+ * Copyright 2020 InfAI (CC SES)
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -14,24 +14,20 @@
  * limitations under the License.
  */
 
-package model
+package controller
 
-import "time"
+import (
+	"github.com/SENERGY-Platform/connection-log-worker/lib/model"
+	"time"
+)
 
-type HubLog struct {
-	Id        string    `json:"id"`
-	Connected bool      `json:"connected"`
-	Time      time.Time `json:"time"`
-}
-
-type DeviceLog struct {
-	Id        string    `json:"id"`
-	Connected bool      `json:"connected"`
-	Time      time.Time `json:"time"`
-}
-
-type DeviceCommand struct {
-	Command string `json:"command"`
-	Id      string `json:"id"`
-	Owner   string `json:"owner"`
+func (this *Controller) UpdateDevice(command model.DeviceCommand) error {
+	if command.Command == "DELETE" {
+		return this.LogDevice(model.DeviceLog{
+			Id:        command.Id,
+			Connected: false,
+			Time:      time.Now(),
+		})
+	}
+	return nil
 }

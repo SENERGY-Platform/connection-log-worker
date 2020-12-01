@@ -19,6 +19,7 @@ package server
 import (
 	"context"
 	"github.com/ory/dockertest"
+	"github.com/ory/dockertest/docker"
 	"go.mongodb.org/mongo-driver/mongo"
 	"go.mongodb.org/mongo-driver/mongo/options"
 	"go.mongodb.org/mongo-driver/mongo/readpref"
@@ -28,7 +29,12 @@ import (
 
 func MongoTestServer(pool *dockertest.Pool, ctx context.Context) (hostPort string, ipAddress string, err error) {
 	log.Println("start mongodb")
-	container, err := pool.Run("mongo", "4.1.11", []string{})
+	container, err := pool.RunWithOptions(&dockertest.RunOptions{
+		Repository: "mongo",
+		Tag:        "4.1.11",
+	}, func(config *docker.HostConfig) {
+		config.Tmpfs = map[string]string{"/data/db": "rw"}
+	})
 	if err != nil {
 		return "", "", err
 	}

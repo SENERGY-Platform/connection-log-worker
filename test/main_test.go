@@ -96,6 +96,75 @@ func Test(t *testing.T) {
 
 	t.Run("check alternating state true", testStateUpdate(config, connectionlog, true, true))
 	t.Run("check alternating state false", testStateUpdate(config, connectionlog, false, true))
+
+	t.Run("check state after delete", testStateAfterDelete(config, connectionlog, true))
+}
+
+func testStateAfterDelete(config config.Config, connectionlog string, initialState bool) func(t *testing.T) {
+	return func(t *testing.T) {
+		var state bool = initialState
+		var deviceId string
+		var count = 1
+
+		t.Run("create device", func(t *testing.T) {
+			deviceId = createDevice(t, config.ZookeeperUrl)
+		})
+		time.Sleep(10 * time.Second)
+
+		t.Run("send device log", func(t *testing.T) {
+			sendLog(t, config.ZookeeperUrl, config.DeviceLogTopic, state, deviceId)
+		})
+
+		time.Sleep(10 * time.Second)
+
+		t.Run("check device log", func(t *testing.T) {
+			checkDeviceLog(t, connectionlog, deviceId, state, count)
+		})
+
+		t.Run("send device delete", func(t *testing.T) {
+			sendDeviceDelete(t, config, deviceId)
+		})
+
+		time.Sleep(10 * time.Second)
+
+		t.Run("check device log", func(t *testing.T) {
+			checkDeviceLog(t, connectionlog, deviceId, false, count+1)
+		})
+	}
+}
+
+func sendDeviceDelete(t *testing.T, config config.Config, id string) {
+	b, err := json.Marshal(model.DeviceCommand{
+		Command: "DELETE",
+		Id:      id,
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	broker, err := helper.GetBroker(config.ZookeeperUrl)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(broker) == 0 {
+		t.Fatal(broker)
+	}
+	producer, err := helper.GetProducer(broker, config.DeviceTopic, true)
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer producer.Close()
+	defer time.Sleep(2 * time.Second)
+	err = producer.WriteMessages(
+		context.Background(),
+		kafka.Message{
+			Key:   []byte(id),
+			Value: b,
+			Time:  time.Now(),
+		},
+	)
+	if err != nil {
+		t.Fatal(err)
+	}
 }
 
 func testStateUpdate(config config.Config, connectionlog string, initialState bool, alternating bool) func(t *testing.T) {

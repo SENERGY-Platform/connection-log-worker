@@ -25,7 +25,7 @@ import (
 
 func Elasticsearch(pool *dockertest.Pool, ctx context.Context) (hostPort string, ipAddress string, err error) {
 	log.Println("start elasticsearch")
-	repo, err := pool.Run("docker.elastic.co/elasticsearch/elasticsearch", "6.4.3", []string{"discovery.type=single-node"})
+	repo, err := pool.Run("docker.elastic.co/elasticsearch/elasticsearch", "7.6.1", []string{"discovery.type=single-node"})
 	if err != nil {
 		return "", "", err
 	}

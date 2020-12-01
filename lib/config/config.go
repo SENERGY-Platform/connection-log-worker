@@ -41,6 +41,7 @@ type Config struct {
 
 	DeviceLogTopic string
 	HubLogTopic    string
+	DeviceTopic    string
 
 	ZookeeperUrl string
 	KafkaGroupId string

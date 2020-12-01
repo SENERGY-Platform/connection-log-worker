@@ -14,24 +14,25 @@
  * limitations under the License.
  */
 
-package model
+package listener
 
-import "time"
+import (
+	"encoding/json"
+	"github.com/SENERGY-Platform/connection-log-worker/lib/config"
+	"github.com/SENERGY-Platform/connection-log-worker/lib/model"
+)
 
-type HubLog struct {
-	Id        string    `json:"id"`
-	Connected bool      `json:"connected"`
-	Time      time.Time `json:"time"`
+func init() {
+	Factories = append(Factories, DevicesListenerFactory)
 }
 
-type DeviceLog struct {
-	Id        string    `json:"id"`
-	Connected bool      `json:"connected"`
-	Time      time.Time `json:"time"`
-}
-
-type DeviceCommand struct {
-	Command string `json:"command"`
-	Id      string `json:"id"`
-	Owner   string `json:"owner"`
+func DevicesListenerFactory(config config.Config, control Controller) (topic string, listener Listener, err error) {
+	return config.DeviceTopic, func(msg []byte) (err error) {
+		command := model.DeviceCommand{}
+		err = json.Unmarshal(msg, &command)
+		if err != nil {
+			return
+		}
+		return control.UpdateDevice(command)
+	}, nil
 }

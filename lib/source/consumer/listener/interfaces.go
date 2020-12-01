@@ -23,4 +23,5 @@ import (
 type Controller interface {
 	LogHub(log model.HubLog) error
 	LogDevice(log model.DeviceLog) error
+	UpdateDevice(command model.DeviceCommand) error
 }

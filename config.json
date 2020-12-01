@@ -6,6 +6,7 @@
 
   "DeviceLogTopic": "device_log",
   "HubLogTopic": "gateway_log",
+  "DeviceTopic": "devices",
 
   "InfluxdbUrl": "http://influxdb:8086",
   "InfluxdbDb": "connectionlog",
