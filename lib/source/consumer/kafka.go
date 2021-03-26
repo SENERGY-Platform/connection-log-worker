@@ -63,7 +63,7 @@ func (this *Consumer) start() error {
 		Brokers:        broker,
 		GroupID:        this.groupId,
 		Topic:          this.topic,
-		MaxWait:        1 * time.Second,
+		MaxWait:        10 * time.Second,
 		Logger:         log.New(ioutil.Discard, "", 0),
 		ErrorLogger:    log.New(os.Stderr, "[KAFKA]", 0),
 	})
