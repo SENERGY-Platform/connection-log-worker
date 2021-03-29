@@ -23,7 +23,6 @@ import (
 	"io"
 	"io/ioutil"
 	"log"
-	"os"
 	"sync"
 	"time"
 )
@@ -63,9 +62,9 @@ func (this *Consumer) start() error {
 		Brokers:        broker,
 		GroupID:        this.groupId,
 		Topic:          this.topic,
-		MaxWait:        10 * time.Second,
+		MaxWait:        1 * time.Second,
 		Logger:         log.New(ioutil.Discard, "", 0),
-		ErrorLogger:    log.New(os.Stderr, "[KAFKA]", 0),
+		ErrorLogger:    log.New(ioutil.Discard, "", 0),
 	})
 	go func() {
 		defer r.Close()
