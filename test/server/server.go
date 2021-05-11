@@ -47,9 +47,9 @@ func New(parentCtx context.Context, defaults config.Config) (config config.Confi
 		cancel()
 		return config, "", err
 	}
-	config.ZookeeperUrl = zk + ":2181"
+	zkUrl := zk + ":2181"
 
-	err = Kafka(pool, ctx, config.ZookeeperUrl)
+	config.KafkaUrl, err = Kafka(pool, ctx, zkUrl)
 	if err != nil {
 		log.Println("ERROR:", err)
 		debug.PrintStack()
@@ -87,7 +87,7 @@ func New(parentCtx context.Context, defaults config.Config) (config config.Confi
 	}
 	config.MongoUrl = "mongodb://" + mongoIp
 
-	_, permIp, err := PermSearch(pool, ctx, config.ZookeeperUrl, elasticIp)
+	_, permIp, err := PermSearch(pool, ctx, config.KafkaUrl, elasticIp)
 	if err != nil {
 		log.Println("ERROR:", err)
 		debug.PrintStack()

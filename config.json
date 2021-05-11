@@ -14,7 +14,7 @@
   "InfluxdbPw": "",
   "InfluxdbTimeout": 3,
 
-  "ZookeeperUrl": "zk",
+  "KafkaUrl": "kafka:9092",
 
   "Debug": true
 }

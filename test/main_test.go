@@ -23,6 +23,7 @@ import (
 	"github.com/SENERGY-Platform/connection-log-worker/lib/config"
 	"github.com/SENERGY-Platform/connection-log-worker/lib/model"
 	"github.com/SENERGY-Platform/connection-log-worker/lib/source/consumer"
+	"github.com/SENERGY-Platform/connection-log-worker/lib/source/util"
 	"github.com/SENERGY-Platform/connection-log-worker/test/helper"
 	"github.com/SENERGY-Platform/connection-log-worker/test/server"
 	"github.com/influxdata/influxdb/client/v2"
@@ -107,12 +108,12 @@ func testStateAfterDelete(config config.Config, connectionlog string, initialSta
 		var count = 1
 
 		t.Run("create device", func(t *testing.T) {
-			deviceId = createDevice(t, config.ZookeeperUrl)
+			deviceId = createDevice(t, config.KafkaUrl)
 		})
 		time.Sleep(10 * time.Second)
 
 		t.Run("send device log", func(t *testing.T) {
-			sendLog(t, config.ZookeeperUrl, config.DeviceLogTopic, state, deviceId)
+			sendLog(t, config.KafkaUrl, config.DeviceLogTopic, state, deviceId)
 		})
 
 		time.Sleep(10 * time.Second)
@@ -141,7 +142,7 @@ func sendDeviceDelete(t *testing.T, config config.Config, id string) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	broker, err := helper.GetBroker(config.ZookeeperUrl)
+	broker, err := util.GetBroker(config.KafkaUrl)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -175,21 +176,21 @@ func testStateUpdate(config config.Config, connectionlog string, initialState bo
 		var count = 1
 
 		t.Run("create device", func(t *testing.T) {
-			deviceId = createDevice(t, config.ZookeeperUrl)
+			deviceId = createDevice(t, config.KafkaUrl)
 		})
 
 		t.Run("create hub", func(t *testing.T) {
-			hubId = createHub(t, config.ZookeeperUrl)
+			hubId = createHub(t, config.KafkaUrl)
 		})
 
 		time.Sleep(10 * time.Second)
 
 		t.Run("send device log", func(t *testing.T) {
-			sendLog(t, config.ZookeeperUrl, config.DeviceLogTopic, state, deviceId)
+			sendLog(t, config.KafkaUrl, config.DeviceLogTopic, state, deviceId)
 		})
 
 		t.Run("send hub log", func(t *testing.T) {
-			sendLog(t, config.ZookeeperUrl, config.HubLogTopic, state, hubId)
+			sendLog(t, config.KafkaUrl, config.HubLogTopic, state, hubId)
 		})
 
 		if alternating {
@@ -198,11 +199,11 @@ func testStateUpdate(config config.Config, connectionlog string, initialState bo
 		}
 
 		t.Run("send device log 2", func(t *testing.T) {
-			sendLog(t, config.ZookeeperUrl, config.DeviceLogTopic, state, deviceId)
+			sendLog(t, config.KafkaUrl, config.DeviceLogTopic, state, deviceId)
 		})
 
 		t.Run("send hub log 2", func(t *testing.T) {
-			sendLog(t, config.ZookeeperUrl, config.HubLogTopic, state, hubId)
+			sendLog(t, config.KafkaUrl, config.HubLogTopic, state, hubId)
 		})
 
 		time.Sleep(10 * time.Second)
@@ -297,7 +298,7 @@ func checkHubState(t *testing.T, connectionlogUrl string, id string, state bool)
 	}
 }
 
-func sendLog(t *testing.T, zk string, topic string, state bool, id string) {
+func sendLog(t *testing.T, kafkaUrl string, topic string, state bool, id string) {
 	b, err := json.Marshal(model.DeviceLog{
 		Id:        id,
 		Connected: state,
@@ -306,7 +307,7 @@ func sendLog(t *testing.T, zk string, topic string, state bool, id string) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	broker, err := helper.GetBroker(zk)
+	broker, err := util.GetBroker(kafkaUrl)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -332,9 +333,9 @@ func sendLog(t *testing.T, zk string, topic string, state bool, id string) {
 	}
 }
 
-func createDevice(t *testing.T, zk string) (id string) {
+func createDevice(t *testing.T, kafkaUrl string) (id string) {
 	id = uuid2.NewV4().String()
-	broker, err := helper.GetBroker(zk)
+	broker, err := util.GetBroker(kafkaUrl)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -361,9 +362,9 @@ func createDevice(t *testing.T, zk string) (id string) {
 	return id
 }
 
-func createHub(t *testing.T, zk string) (id string) {
+func createHub(t *testing.T, kafkaUrl string) (id string) {
 	id = uuid2.NewV4().String()
-	broker, err := helper.GetBroker(zk)
+	broker, err := util.GetBroker(kafkaUrl)
 	if err != nil {
 		t.Fatal(err)
 	}

@@ -43,12 +43,12 @@ type Config struct {
 	HubLogTopic    string
 	DeviceTopic    string
 
-	ZookeeperUrl string
+	KafkaUrl     string
 	KafkaGroupId string
 	Debug        bool
 }
 
-//loads config from json in location and used environment variables (e.g ZookeeperUrl --> ZOOKEEPER_URL)
+//loads config from json in location and used environment variables (e.g KafkaUrl --> ZOOKEEPER_URL)
 func Load(location string) (config Config, err error) {
 	file, error := os.Open(location)
 	if error != nil {
