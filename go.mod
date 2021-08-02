@@ -1,6 +1,6 @@
 module github.com/SENERGY-Platform/connection-log-worker
 
-go 1.13
+go 1.16
 
 require (
 	github.com/influxdata/influxdb v1.5.2
