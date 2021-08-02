@@ -18,8 +18,8 @@ package server
 
 import (
 	"context"
-	"github.com/ory/dockertest"
-	"github.com/ory/dockertest/docker"
+	"github.com/ory/dockertest/v3"
+	"github.com/ory/dockertest/v3/docker"
 	"github.com/segmentio/kafka-go"
 	"github.com/wvanbergen/kazoo-go"
 	"log"

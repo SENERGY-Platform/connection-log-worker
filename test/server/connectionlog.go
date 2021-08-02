@@ -19,7 +19,7 @@ package server
 import (
 	"context"
 	"github.com/influxdata/influxdb/client/v2"
-	"github.com/ory/dockertest"
+	"github.com/ory/dockertest/v3"
 	"log"
 	"net/http"
 	"time"
