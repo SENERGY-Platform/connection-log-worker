@@ -1,5 +1,5 @@
 /*
- * Copyright 2019 InfAI (CC SES)
+ * Copyright 2020 InfAI (CC SES)
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -14,15 +14,19 @@
  * limitations under the License.
  */
 
-package listener
+package controller
 
 import (
 	"github.com/SENERGY-Platform/connection-log-worker/lib/model"
 )
 
-type Controller interface {
-	LogHub(log model.HubLog) error
-	LogDevice(log model.DeviceLog) error
-	UpdateDevice(command model.DeviceCommand) error
-	UpdateHub(command model.HubCommand) error
+func (this *Controller) UpdateHub(command model.HubCommand) error {
+	if command.Command == "DELETE" {
+		err := this.deleteGatewayLog(command.Id)
+		if err != nil {
+			return err
+		}
+		return this.deleteHubState(command.Id)
+	}
+	return nil
 }

@@ -30,40 +30,12 @@ import (
 	uuid2 "github.com/satori/go.uuid"
 	"github.com/segmentio/kafka-go"
 	"log"
+	"reflect"
 	"testing"
 	"time"
 )
 
-func TestInit(t *testing.T) {
-	defaultConfig, err := config.Load("../config.json")
-	if err != nil {
-		t.Error(err)
-		return
-	}
-
-	ctx, cancel := context.WithCancel(context.Background())
-	defer time.Sleep(10 * time.Second) //wait for docker cleanup
-	defer cancel()
-
-	config, connectionlog, err := server.New(ctx, defaultConfig)
-	if err != nil {
-		t.Error(err)
-		return
-	}
-
-	err = lib.Start(ctx, config, func(err error, consumer *consumer.Consumer) {
-		t.Error(err)
-		return
-	})
-	if err != nil {
-		t.Error(err)
-		return
-	}
-
-	log.Println(connectionlog)
-}
-
-func Test(t *testing.T) {
+func TestDevice(t *testing.T) {
 	defaultConfig, err := config.Load("../config.json")
 	if err != nil {
 		t.Error(err)
@@ -129,7 +101,7 @@ func testStateAfterDelete(config config.Config, connectionlog string, initialSta
 		time.Sleep(10 * time.Second)
 
 		t.Run("check device log", func(t *testing.T) {
-			checkDeviceLog(t, connectionlog, deviceId, false, count+1)
+			checkDeviceLogs(t, connectionlog, []string{deviceId}, map[string]bool{}, 0)
 		})
 	}
 }
@@ -227,9 +199,22 @@ func checkDeviceLog(t *testing.T, connectionlogUrl string, id string, state bool
 	})
 }
 
+func checkDeviceLogs(t *testing.T, connectionlogUrl string, ids []string, expectedStates map[string]bool, count int) {
+	t.Run("check device state", func(t *testing.T) {
+		checkDeviceStates(t, connectionlogUrl, ids, expectedStates)
+	})
+	t.Run("check device history", func(t *testing.T) {
+		checkDeviceHistorys(t, connectionlogUrl, ids, count)
+	})
+}
+
 func checkDeviceHistory(t *testing.T, connectionlogUrl string, id string, count int) {
+	checkDeviceHistorys(t, connectionlogUrl, []string{id}, count)
+}
+
+func checkDeviceHistorys(t *testing.T, connectionlogUrl string, ids []string, count int) {
 	result := []client.Result{}
-	err := helper.AdminPost(connectionlogUrl+"/intern/history/device/1h", []string{id}, &result)
+	err := helper.AdminPost(connectionlogUrl+"/intern/history/device/1h", ids, &result)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -240,7 +225,10 @@ func checkDeviceHistory(t *testing.T, connectionlogUrl string, id string, count 
 		t.Fatal(result[0].Err)
 	}
 	if len(result[0].Series) != 1 {
-		t.Fatal(len(result[0].Series), result[0].Series)
+		if count != 0 {
+			t.Fatal(len(result[0].Series), result[0].Series)
+		}
+		return
 	}
 	if len(result[0].Series[0].Values) != count {
 		t.Fatal(len(result[0].Series[0].Values), result[0].Series[0].Values)
@@ -248,13 +236,17 @@ func checkDeviceHistory(t *testing.T, connectionlogUrl string, id string, count 
 }
 
 func checkDeviceState(t *testing.T, connectionlogUrl string, id string, state bool) {
+	checkDeviceStates(t, connectionlogUrl, []string{id}, map[string]bool{id: state})
+}
+
+func checkDeviceStates(t *testing.T, connectionlogUrl string, ids []string, expected map[string]bool) {
 	result := map[string]bool{}
-	err := helper.AdminPost(connectionlogUrl+"/intern/state/device/check", []string{id}, &result)
+	err := helper.AdminPost(connectionlogUrl+"/intern/state/device/check", ids, &result)
 	if err != nil {
 		t.Fatal(err)
 	}
-	if len(result) != 1 || result[id] != state {
-		t.Fatal(len(result), result)
+	if !reflect.DeepEqual(expected, result) {
+		t.Error(result, "\n", expected)
 	}
 }
 

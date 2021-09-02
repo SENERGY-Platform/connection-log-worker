@@ -94,3 +94,19 @@ func (this *Controller) logGatewayHistory(gatewayLog model.HubLog) error {
 	bp.AddPoint(pt)
 	return this.getInfluxDb().Write(bp)
 }
+
+func (this *Controller) deleteDeviceLog(deviceId string) (err error) {
+	resp, err := this.influxdbInstance.Query(client.NewQuery(`DELETE FROM device WHERE "device"='`+deviceId+`'`, this.config.InfluxdbDb, "s"))
+	if err != nil {
+		return err
+	}
+	return resp.Error()
+}
+
+func (this *Controller) deleteGatewayLog(gwId string) (err error) {
+	resp, err := this.influxdbInstance.Query(client.NewQuery(`DELETE FROM gateway WHERE "gateway"='`+gwId+`'`, this.config.InfluxdbDb, "s"))
+	if err != nil {
+		return err
+	}
+	return resp.Error()
+}

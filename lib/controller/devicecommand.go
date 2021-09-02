@@ -18,16 +18,15 @@ package controller
 
 import (
 	"github.com/SENERGY-Platform/connection-log-worker/lib/model"
-	"time"
 )
 
 func (this *Controller) UpdateDevice(command model.DeviceCommand) error {
 	if command.Command == "DELETE" {
-		return this.LogDevice(model.DeviceLog{
-			Id:        command.Id,
-			Connected: false,
-			Time:      time.Now(),
-		})
+		err := this.deleteDeviceLog(command.Id)
+		if err != nil {
+			return err
+		}
+		return this.deleteDeviceState(command.Id)
 	}
 	return nil
 }

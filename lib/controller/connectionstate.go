@@ -48,3 +48,17 @@ func (this *Controller) setDeviceState(deviceLog model.DeviceLog) (update bool, 
 	}
 	return
 }
+
+func (this *Controller) deleteHubState(gwId string) (err error) {
+	session, collection := this.getHubStateCollection()
+	defer session.Close()
+	_, err = collection.RemoveAll(bson.M{"gateway": gwId})
+	return
+}
+
+func (this *Controller) deleteDeviceState(deviceId string) (err error) {
+	session, collection := this.getDeviceStateCollection()
+	defer session.Close()
+	_, err = collection.RemoveAll(bson.M{"device": deviceId})
+	return
+}

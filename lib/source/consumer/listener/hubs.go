@@ -17,12 +17,22 @@
 package listener
 
 import (
+	"encoding/json"
+	"github.com/SENERGY-Platform/connection-log-worker/lib/config"
 	"github.com/SENERGY-Platform/connection-log-worker/lib/model"
 )
 
-type Controller interface {
-	LogHub(log model.HubLog) error
-	LogDevice(log model.DeviceLog) error
-	UpdateDevice(command model.DeviceCommand) error
-	UpdateHub(command model.HubCommand) error
+func init() {
+	Factories = append(Factories, HubsListenerFactory)
+}
+
+func HubsListenerFactory(config config.Config, control Controller) (topic string, listener Listener, err error) {
+	return config.HubTopic, func(msg []byte) (err error) {
+		command := model.HubCommand{}
+		err = json.Unmarshal(msg, &command)
+		if err != nil {
+			return
+		}
+		return control.UpdateHub(command)
+	}, nil
 }
