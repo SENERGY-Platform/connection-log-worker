@@ -96,7 +96,7 @@ func (this *Controller) logGatewayHistory(gatewayLog model.HubLog) error {
 }
 
 func (this *Controller) deleteDeviceLog(deviceId string) (err error) {
-	resp, err := this.influxdbInstance.Query(client.NewQuery(`DELETE FROM device WHERE "device"='`+deviceId+`'`, this.config.InfluxdbDb, "s"))
+	resp, err := this.getInfluxDb().Query(client.NewQuery(`DELETE FROM device WHERE "device"='`+deviceId+`'`, this.config.InfluxdbDb, "s"))
 	if err != nil {
 		return err
 	}
@@ -104,7 +104,7 @@ func (this *Controller) deleteDeviceLog(deviceId string) (err error) {
 }
 
 func (this *Controller) deleteGatewayLog(gwId string) (err error) {
-	resp, err := this.influxdbInstance.Query(client.NewQuery(`DELETE FROM gateway WHERE "gateway"='`+gwId+`'`, this.config.InfluxdbDb, "s"))
+	resp, err := this.getInfluxDb().Query(client.NewQuery(`DELETE FROM gateway WHERE "gateway"='`+gwId+`'`, this.config.InfluxdbDb, "s"))
 	if err != nil {
 		return err
 	}
