@@ -18,6 +18,7 @@ package consumer
 
 import (
 	"context"
+	"errors"
 	"github.com/SENERGY-Platform/connection-log-worker/lib/source/util"
 	"github.com/segmentio/kafka-go"
 	"io"
@@ -68,15 +69,14 @@ func (this *Consumer) start() error {
 	})
 	go func() {
 		defer r.Close()
+		defer log.Println("close consumer for topic ", this.topic)
 		for {
 			select {
 			case <-this.ctx.Done():
-				log.Println("close kafka reader ", this.topic)
 				return
 			default:
 				m, err := r.FetchMessage(this.ctx)
 				if err == io.EOF || err == context.Canceled {
-					log.Println("close consumer for topic ", this.topic)
 					return
 				}
 				if err != nil {
@@ -84,14 +84,40 @@ func (this *Consumer) start() error {
 					this.errorhandler(err, this)
 					return
 				}
-				err = this.listener(m.Topic, m.Value)
+
+				err = retry(func() error {
+					return this.listener(m.Topic, m.Value)
+				}, func(n int64) time.Duration {
+					return time.Duration(n) * time.Second
+				}, 10*time.Minute)
+
 				if err != nil {
 					log.Println("ERROR: unable to handle message (no commit)", err)
+					this.errorhandler(err, this)
 				} else {
 					err = r.CommitMessages(this.ctx, m)
 				}
 			}
 		}
 	}()
+	return err
+}
+
+func retry(f func() error, waitProvider func(n int64) time.Duration, timeout time.Duration) (err error) {
+	err = errors.New("")
+	start := time.Now()
+	for i := int64(1); err != nil && time.Since(start) < timeout; i++ {
+		err = f()
+		if err != nil {
+			log.Println("ERROR: kafka listener error:", err)
+			wait := waitProvider(i)
+			if time.Since(start)+wait < timeout {
+				log.Println("ERROR: retry after:", wait.String())
+				time.Sleep(wait)
+			} else {
+				return err
+			}
+		}
+	}
 	return err
 }
