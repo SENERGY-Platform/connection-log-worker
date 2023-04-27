@@ -18,78 +18,94 @@ package server
 
 import (
 	"context"
-	"github.com/influxdata/influxdb/client/v2"
-	"github.com/ory/dockertest/v3"
+	"github.com/testcontainers/testcontainers-go"
+	"github.com/testcontainers/testcontainers-go/wait"
 	"log"
-	"net/http"
-	"time"
+	"sync"
 )
 
-func Connectionlog(pool *dockertest.Pool, ctx context.Context, mongourl string, permurl string, influxurl string) (hostPort string, ipAddress string, err error) {
+func Connectionlog(ctx context.Context, wg *sync.WaitGroup, mongourl string, permurl string, influxurl string) (hostport string, containerip string, err error) {
 	log.Println("start connectionlog")
-	repo, err := pool.Run("fgseitsrancher.wifa.intern.uni-leipzig.de:5000/connection-log", "dev", []string{
-		"MONGO_URL=" + mongourl,
-		"PERMISSIONS_URL=" + permurl,
-		"INFLUXDB_URL=" + influxurl,
-		"INFLUXDB_TIMEOUT=3",
-		"INFLUXDB_USER=user",
-		"INFLUXDB_PW=pw",
+	c, err := testcontainers.GenericContainer(ctx, testcontainers.GenericContainerRequest{
+		ContainerRequest: testcontainers.ContainerRequest{
+			Image:        "ghcr.io/senergy-platform/connectionlog:dev",
+			ExposedPorts: []string{"8080/tcp"},
+			WaitingFor: wait.ForAll(
+				wait.ForListeningPort("8080/tcp"),
+			),
+			Env: map[string]string{
+				"MONGO_URL":        mongourl,
+				"PERMISSIONS_URL":  permurl,
+				"INFLUXDB_URL":     influxurl,
+				"INFLUXDB_TIMEOUT": "3",
+				"INFLUXDB_USER":    "user",
+				"INFLUXDB_PW":      "pw",
+			},
+		},
+		Started: true,
 	})
 	if err != nil {
 		return "", "", err
 	}
+
+	wg.Add(1)
 	go func() {
+		defer wg.Done()
 		<-ctx.Done()
-		repo.Close()
+		log.Println("DEBUG: remove container connectionlog", c.Terminate(context.Background()))
 	}()
-	go Dockerlog(pool, ctx, repo, "CONNECTIONLOG")
-	hostPort = repo.GetPort("8080/tcp")
-	err = pool.Retry(func() error {
-		log.Println("try connectionlog connection...")
-		_, err := http.Get("http://" + repo.Container.NetworkSettings.IPAddress + ":8080")
-		if err != nil {
-			log.Println(err)
-		}
-		return err
-	})
-	return hostPort, repo.Container.NetworkSettings.IPAddress, err
+
+	containerip, err = c.ContainerIP(ctx)
+	if err != nil {
+		return "", "", err
+	}
+	temp, err := c.MappedPort(ctx, "8080/tcp")
+	if err != nil {
+		return "", "", err
+	}
+	hostport = temp.Port()
+
+	return hostport, containerip, err
 }
 
-func Influxdb(pool *dockertest.Pool, ctx context.Context) (hostPort string, ipAddress string, err error) {
-	log.Println("start connectionlog")
-	repo, err := pool.Run("influxdb", "1.6.3", []string{
-		"INFLUXDB_DB=connectionlog",
-		"INFLUXDB_ADMIN_ENABLED=true",
-		"INFLUXDB_ADMIN_USER=user",
-		"INFLUXDB_ADMIN_PASSWORD=pw",
+func Influxdb(ctx context.Context, wg *sync.WaitGroup) (hostport string, containerip string, err error) {
+	log.Println("start connectionlog influx")
+	c, err := testcontainers.GenericContainer(ctx, testcontainers.GenericContainerRequest{
+		ContainerRequest: testcontainers.ContainerRequest{
+			Image:        "influxdb:1.6.3",
+			ExposedPorts: []string{"8086/tcp"},
+			WaitingFor: wait.ForAll(
+				wait.ForListeningPort("8086/tcp"),
+			),
+			Env: map[string]string{
+				"INFLUXDB_DB":             "connectionlog",
+				"INFLUXDB_ADMIN_ENABLED":  "true",
+				"INFLUXDB_ADMIN_USER":     "user",
+				"INFLUXDB_ADMIN_PASSWORD": "pw",
+			},
+		},
+		Started: true,
 	})
 	if err != nil {
 		return "", "", err
 	}
+
+	wg.Add(1)
 	go func() {
+		defer wg.Done()
 		<-ctx.Done()
-		repo.Close()
+		log.Println("DEBUG: remove container connectionlog influx", c.Terminate(context.Background()))
 	}()
-	hostPort = repo.GetPort("8086/tcp")
-	err = pool.Retry(func() error {
-		log.Println("try connectionlog connection...")
-		client, err := client.NewHTTPClient(client.HTTPConfig{
-			Addr:     "http://" + repo.Container.NetworkSettings.IPAddress + ":8086",
-			Username: "user",
-			Password: "pw",
-			Timeout:  time.Duration(1) * time.Second,
-		})
-		if err != nil {
-			log.Println(err)
-			return err
-		}
-		defer client.Close()
-		_, _, err = client.Ping(1 * time.Second)
-		if err != nil {
-			log.Println(err)
-			return err
-		}
-		return err
-	})
-	return hostPort, repo.Container.NetworkSettings.IPAddress, err
+
+	containerip, err = c.ContainerIP(ctx)
+	if err != nil {
+		return "", "", err
+	}
+	temp, err := c.MappedPort(ctx, "8086/tcp")
+	if err != nil {
+		return "", "", err
+	}
+	hostport = temp.Port()
+
+	return hostport, containerip, err
 }

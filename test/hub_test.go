@@ -30,11 +30,17 @@ import (
 	"github.com/segmentio/kafka-go"
 	"log"
 	"reflect"
+	"sync"
 	"testing"
 	"time"
 )
 
 func TestHub(t *testing.T) {
+	wg := &sync.WaitGroup{}
+	defer wg.Wait()
+	ctx, cancel := context.WithCancel(context.Background())
+	defer cancel()
+
 	defaultConfig, err := config.Load("../config.json")
 	if err != nil {
 		t.Error(err)
@@ -42,11 +48,7 @@ func TestHub(t *testing.T) {
 	}
 	defaultConfig.Debug = true
 
-	ctx, cancel := context.WithCancel(context.Background())
-	defer time.Sleep(10 * time.Second) //wait for docker cleanup
-	defer cancel()
-
-	config, connectionlogip, err := server.New(ctx, defaultConfig)
+	config, connectionlogip, err := server.New(ctx, wg, defaultConfig)
 	if err != nil {
 		t.Error(err)
 		return

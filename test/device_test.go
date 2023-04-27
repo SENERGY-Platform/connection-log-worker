@@ -26,16 +26,22 @@ import (
 	"github.com/SENERGY-Platform/connection-log-worker/lib/source/util"
 	"github.com/SENERGY-Platform/connection-log-worker/test/helper"
 	"github.com/SENERGY-Platform/connection-log-worker/test/server"
+	"github.com/google/uuid"
 	"github.com/influxdata/influxdb/client/v2"
-	uuid2 "github.com/satori/go.uuid"
 	"github.com/segmentio/kafka-go"
 	"log"
 	"reflect"
+	"sync"
 	"testing"
 	"time"
 )
 
 func TestDevice(t *testing.T) {
+	wg := &sync.WaitGroup{}
+	defer wg.Wait()
+	ctx, cancel := context.WithCancel(context.Background())
+	defer cancel()
+
 	defaultConfig, err := config.Load("../config.json")
 	if err != nil {
 		t.Error(err)
@@ -43,11 +49,7 @@ func TestDevice(t *testing.T) {
 	}
 	defaultConfig.Debug = true
 
-	ctx, cancel := context.WithCancel(context.Background())
-	defer time.Sleep(10 * time.Second) //wait for docker cleanup
-	defer cancel()
-
-	config, connectionlogip, err := server.New(ctx, defaultConfig)
+	config, connectionlogip, err := server.New(ctx, wg, defaultConfig)
 	if err != nil {
 		t.Error(err)
 		return
@@ -326,7 +328,7 @@ func sendLog(t *testing.T, kafkaUrl string, topic string, state bool, id string)
 }
 
 func createDevice(t *testing.T, kafkaUrl string) (id string) {
-	id = uuid2.NewV4().String()
+	id = uuid.NewString()
 	broker, err := util.GetBroker(kafkaUrl)
 	if err != nil {
 		t.Fatal(err)
@@ -355,7 +357,7 @@ func createDevice(t *testing.T, kafkaUrl string) (id string) {
 }
 
 func createHub(t *testing.T, kafkaUrl string) (id string) {
-	id = uuid2.NewV4().String()
+	id = uuid.NewString()
 	broker, err := util.GetBroker(kafkaUrl)
 	if err != nil {
 		t.Fatal(err)
