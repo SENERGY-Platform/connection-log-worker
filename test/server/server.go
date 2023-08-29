@@ -42,7 +42,7 @@ func New(ctx context.Context, wg *sync.WaitGroup, defaults config.Config) (confi
 		return config, "", err
 	}
 
-	_, elasticIp, err := Elasticsearch(ctx, wg)
+	_, searchIp, err := OpenSearch(ctx, wg)
 	if err != nil {
 		log.Println("ERROR:", err)
 		debug.PrintStack()
@@ -69,7 +69,7 @@ func New(ctx context.Context, wg *sync.WaitGroup, defaults config.Config) (confi
 	}
 	config.MongoUrl = "mongodb://" + mongoIp
 
-	_, permIp, err := PermissionSearch(ctx, wg, config.KafkaUrl, elasticIp)
+	_, permIp, err := PermissionSearch(ctx, wg, config.KafkaUrl, searchIp)
 	if err != nil {
 		log.Println("ERROR:", err)
 		debug.PrintStack()

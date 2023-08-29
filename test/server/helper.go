@@ -20,12 +20,10 @@ import (
 	"context"
 	"errors"
 	"fmt"
-	"github.com/testcontainers/testcontainers-go"
 	"github.com/testcontainers/testcontainers-go/wait"
 	"io"
 	"log"
 	"net"
-	"os"
 	"time"
 )
 
@@ -41,30 +39,6 @@ func getFreePort() (int, error) {
 	}
 	defer listener.Close()
 	return listener.Addr().(*net.TCPAddr).Port, nil
-}
-
-func Dockerlog(ctx context.Context, container testcontainers.Container, name string) error {
-	l, err := container.Logs(ctx)
-	if err != nil {
-		return err
-	}
-	out := &LogWriter{logger: log.New(os.Stdout, "["+name+"] ", log.LstdFlags)}
-	go func() {
-		_, err := io.Copy(out, l)
-		if err != nil {
-			log.Println("ERROR: unable to copy docker log", err)
-		}
-	}()
-	return nil
-}
-
-type LogWriter struct {
-	logger *log.Logger
-}
-
-func (this *LogWriter) Write(p []byte) (n int, err error) {
-	this.logger.Print(string(p))
-	return len(p), nil
 }
 
 func waitretry(timeout time.Duration, f func(ctx context.Context, target wait.StrategyTarget) error) func(ctx context.Context, target wait.StrategyTarget) error {
