@@ -57,9 +57,11 @@ func (this *Controller) getHubStateCollection() (session *mgo.Session, collectio
 type DeviceState struct {
 	Device string `json:"device,omitempty" bson:"device,omitempty"`
 	Online bool   `json:"online" bson:"online"`
+	Since  int64  `json:"since" bson:"since"`
 }
 
 type HubState struct {
 	Gateway string `json:"gateway,omitempty" bson:"gateway,omitempty"`
 	Online  bool   `json:"online" bson:"online"`
+	Since   int64  `json:"since" bson:"since"`
 }

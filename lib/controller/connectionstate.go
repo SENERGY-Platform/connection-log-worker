@@ -19,6 +19,7 @@ package controller
 import (
 	"github.com/SENERGY-Platform/connection-log-worker/lib/model"
 	"gopkg.in/mgo.v2/bson"
+	"time"
 )
 
 func (this *Controller) setHubState(gatewayLog model.HubLog) (update bool, err error) {
@@ -30,7 +31,7 @@ func (this *Controller) setHubState(gatewayLog model.HubLog) (update bool, err e
 	}
 	update = count == 0
 	if update {
-		_, err = collection.Upsert(bson.M{"gateway": gatewayLog.Id}, HubState{Gateway: gatewayLog.Id, Online: gatewayLog.Connected})
+		_, err = collection.Upsert(bson.M{"gateway": gatewayLog.Id}, HubState{Gateway: gatewayLog.Id, Online: gatewayLog.Connected, Since: time.Now().Unix()})
 	}
 	return
 }
@@ -44,7 +45,7 @@ func (this *Controller) setDeviceState(deviceLog model.DeviceLog) (update bool, 
 	}
 	update = count == 0
 	if update {
-		_, err = collection.Upsert(bson.M{"device": deviceLog.Id}, DeviceState{Device: deviceLog.Id, Online: deviceLog.Connected})
+		_, err = collection.Upsert(bson.M{"device": deviceLog.Id}, DeviceState{Device: deviceLog.Id, Online: deviceLog.Connected, Since: time.Now().Unix()})
 	}
 	return
 }
