@@ -5,7 +5,6 @@ go 1.22
 require (
 	github.com/google/uuid v1.6.0
 	github.com/influxdata/influxdb v1.11.4
-	github.com/opensearch-project/opensearch-go v1.1.0
 	github.com/segmentio/kafka-go v0.4.47
 	github.com/testcontainers/testcontainers-go v0.27.0
 	github.com/wvanbergen/kazoo-go v0.0.0-20180202103751-f72d8611297a

@@ -42,13 +42,6 @@ func New(ctx context.Context, wg *sync.WaitGroup, defaults config.Config) (confi
 		return config, "", err
 	}
 
-	_, searchIp, err := OpenSearch(ctx, wg)
-	if err != nil {
-		log.Println("ERROR:", err)
-		debug.PrintStack()
-		return config, "", err
-	}
-
 	_, influxip, err := Influxdb(ctx, wg)
 	if err != nil {
 		log.Println("ERROR:", err)
@@ -69,15 +62,15 @@ func New(ctx context.Context, wg *sync.WaitGroup, defaults config.Config) (confi
 	}
 	config.MongoUrl = "mongodb://" + mongoIp
 
-	_, permIp, err := PermissionSearch(ctx, wg, config.KafkaUrl, searchIp)
+	_, permV2Ip, err := PermissionsV2(ctx, wg, config.MongoUrl, config.KafkaUrl)
 	if err != nil {
 		log.Println("ERROR:", err)
 		debug.PrintStack()
 		return config, "", err
 	}
-	permissionUrl := "http://" + permIp + ":8080"
+	permissionsV2Url := "http://" + permV2Ip + ":8080"
 
-	_, connectionlogip, err = Connectionlog(ctx, wg, config.MongoUrl, permissionUrl, config.InfluxdbUrl)
+	_, connectionlogip, err = Connectionlog(ctx, wg, config.MongoUrl, config.InfluxdbUrl, permissionsV2Url)
 	if err != nil {
 		log.Println("ERROR:", err)
 		debug.PrintStack()

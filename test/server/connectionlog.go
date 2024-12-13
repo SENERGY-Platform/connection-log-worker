@@ -24,7 +24,7 @@ import (
 	"sync"
 )
 
-func Connectionlog(ctx context.Context, wg *sync.WaitGroup, mongourl string, permurl string, influxurl string) (hostport string, containerip string, err error) {
+func Connectionlog(ctx context.Context, wg *sync.WaitGroup, mongourl string, influxurl string, permV2Url string) (hostport string, containerip string, err error) {
 	log.Println("start connectionlog")
 	c, err := testcontainers.GenericContainer(ctx, testcontainers.GenericContainerRequest{
 		ContainerRequest: testcontainers.ContainerRequest{
@@ -34,12 +34,12 @@ func Connectionlog(ctx context.Context, wg *sync.WaitGroup, mongourl string, per
 				wait.ForListeningPort("8080/tcp"),
 			),
 			Env: map[string]string{
-				"MONGO_URL":        mongourl,
-				"PERMISSIONS_URL":  permurl,
-				"INFLUXDB_URL":     influxurl,
-				"INFLUXDB_TIMEOUT": "3",
-				"INFLUXDB_USER":    "user",
-				"INFLUXDB_PW":      "pw",
+				"MONGO_URL":          mongourl,
+				"INFLUXDB_URL":       influxurl,
+				"INFLUXDB_TIMEOUT":   "3",
+				"INFLUXDB_USER":      "user",
+				"INFLUXDB_PW":        "pw",
+				"PERMISSIONS_V2_URL": permV2Url,
 			},
 		},
 		Started: true,
