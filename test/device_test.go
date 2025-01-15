@@ -327,6 +327,24 @@ func sendLog(t *testing.T, kafkaUrl string, topic string, state bool, id string)
 	}
 }
 
+func sendFullDeviceLog(t *testing.T, producer *kafka.Writer, deviceLog model.DeviceLog) {
+	b, err := json.Marshal(deviceLog)
+	if err != nil {
+		t.Fatal(err)
+	}
+	err = producer.WriteMessages(
+		context.Background(),
+		kafka.Message{
+			Key:   []byte("cmd.Id"),
+			Value: b,
+			Time:  time.Now(),
+		},
+	)
+	if err != nil {
+		t.Fatal(err)
+	}
+}
+
 func createDevice(t *testing.T, kafkaUrl string) (id string) {
 	id = uuid.NewString()
 	broker, err := util.GetBroker(kafkaUrl)

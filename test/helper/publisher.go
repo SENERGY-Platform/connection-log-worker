@@ -19,7 +19,7 @@ package helper
 import (
 	"github.com/SENERGY-Platform/connection-log-worker/lib/config"
 	"github.com/segmentio/kafka-go"
-	"io/ioutil"
+	"io"
 	"log"
 	"os"
 )
@@ -39,7 +39,7 @@ func GetProducer(broker []string, topic string, debug bool) (writer *kafka.Write
 	if debug {
 		logger = log.New(os.Stdout, "[KAFKA-PRODUCER] ", 0)
 	} else {
-		logger = log.New(ioutil.Discard, "", 0)
+		logger = log.New(io.Discard, "", 0)
 	}
 	writer = &kafka.Writer{
 		Addr:        kafka.TCP(broker...),

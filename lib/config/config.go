@@ -28,10 +28,13 @@ import (
 )
 
 type Config struct {
-	MongoUrl              string `config:"secret"`
-	MongoTable            string
-	DeviceStateCollection string
-	HubStateCollection    string
+	MongoUrl                                string `config:"secret"`
+	MongoTable                              string
+	DeviceStateCollection                   string
+	HubStateCollection                      string
+	DeviceOfflineNotificationInfoCollection string
+
+	NotificationUrl string
 
 	InfluxdbUrl     string
 	InfluxdbDb      string
@@ -47,6 +50,8 @@ type Config struct {
 	KafkaUrl     string
 	KafkaGroupId string
 	Debug        bool
+
+	RoundTime string
 }
 
 // loads config from json in location and used environment variables (e.g KafkaUrl --> ZOOKEEPER_URL)

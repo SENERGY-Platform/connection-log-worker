@@ -25,42 +25,10 @@ import (
 )
 
 func New(ctx context.Context, wg *sync.WaitGroup, defaults config.Config) (config config.Config, connectionlogip string, err error) {
-	config = defaults
-
-	_, zk, err := Zookeeper(ctx, wg)
+	config, err = NewPartial(ctx, wg, defaults)
 	if err != nil {
-		log.Println("ERROR:", err)
-		debug.PrintStack()
-		return config, "", err
+		return config, connectionlogip, err
 	}
-	zkUrl := zk + ":2181"
-
-	config.KafkaUrl, err = Kafka(ctx, wg, zkUrl)
-	if err != nil {
-		log.Println("ERROR:", err)
-		debug.PrintStack()
-		return config, "", err
-	}
-
-	_, influxip, err := Influxdb(ctx, wg)
-	if err != nil {
-		log.Println("ERROR:", err)
-		debug.PrintStack()
-		return config, "", err
-	}
-	config.InfluxdbUrl = "http://" + influxip + ":8086"
-	config.InfluxdbDb = "connectionlog"
-	config.InfluxdbUser = "user"
-	config.InfluxdbPw = "pw"
-	config.InfluxdbTimeout = 3
-
-	_, mongoIp, err := MongoDB(ctx, wg)
-	if err != nil {
-		log.Println("ERROR:", err)
-		debug.PrintStack()
-		return config, "", err
-	}
-	config.MongoUrl = "mongodb://" + mongoIp
 
 	_, permV2Ip, err := PermissionsV2(ctx, wg, config.MongoUrl, config.KafkaUrl)
 	if err != nil {
@@ -78,4 +46,45 @@ func New(ctx context.Context, wg *sync.WaitGroup, defaults config.Config) (confi
 	}
 
 	return config, connectionlogip, nil
+}
+
+func NewPartial(ctx context.Context, wg *sync.WaitGroup, defaults config.Config) (config config.Config, err error) {
+	config = defaults
+
+	_, zk, err := Zookeeper(ctx, wg)
+	if err != nil {
+		log.Println("ERROR:", err)
+		debug.PrintStack()
+		return config, err
+	}
+	zkUrl := zk + ":2181"
+
+	config.KafkaUrl, err = Kafka(ctx, wg, zkUrl)
+	if err != nil {
+		log.Println("ERROR:", err)
+		debug.PrintStack()
+		return config, err
+	}
+
+	_, influxip, err := Influxdb(ctx, wg)
+	if err != nil {
+		log.Println("ERROR:", err)
+		debug.PrintStack()
+		return config, err
+	}
+	config.InfluxdbUrl = "http://" + influxip + ":8086"
+	config.InfluxdbDb = "connectionlog"
+	config.InfluxdbUser = "user"
+	config.InfluxdbPw = "pw"
+	config.InfluxdbTimeout = 3
+
+	_, mongoIp, err := MongoDB(ctx, wg)
+	if err != nil {
+		log.Println("ERROR:", err)
+		debug.PrintStack()
+		return config, err
+	}
+	config.MongoUrl = "mongodb://" + mongoIp
+
+	return config, nil
 }

@@ -25,9 +25,12 @@ type HubLog struct {
 }
 
 type DeviceLog struct {
-	Id        string    `json:"id"`
-	Connected bool      `json:"connected"`
-	Time      time.Time `json:"time"`
+	Id                     string    `json:"id"`
+	Connected              bool      `json:"connected"`
+	Time                   time.Time `json:"time"`
+	MonitorConnectionState string    `json:"monitor_connection_state"`
+	DeviceOwner            string    `json:"device_owner"`
+	DeviceName             string    `json:"device_name"`
 }
 
 type DeviceCommand struct {

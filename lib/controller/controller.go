@@ -23,6 +23,7 @@ import (
 	"gopkg.in/mgo.v2"
 	"log"
 	"sync"
+	"time"
 )
 
 type Controller struct {
@@ -31,10 +32,15 @@ type Controller struct {
 	mongoDbOnce      sync.Once
 	influxdbInstance client.Client
 	influxdbOnce     sync.Once
+	roundTime        time.Duration
 }
 
 func New(config config.Config) *Controller {
-	return &Controller{config: config}
+	roundTime, err := time.ParseDuration(config.RoundTime)
+	if err != nil {
+		roundTime = time.Minute
+	}
+	return &Controller{config: config, roundTime: roundTime}
 }
 
 func (this *Controller) LogHub(hublog model.HubLog) error {
@@ -53,7 +59,7 @@ func (this *Controller) LogHub(hublog model.HubLog) error {
 
 func (this *Controller) LogDevice(devicelog model.DeviceLog) error {
 	if this.config.Debug {
-		log.Println("DEBUG: handle device log update", devicelog)
+		log.Printf("DEBUG: handle device log update %#v\n", devicelog)
 	}
 	updated, err := this.setDeviceState(devicelog)
 	if err != nil {
@@ -61,6 +67,15 @@ func (this *Controller) LogDevice(devicelog model.DeviceLog) error {
 	}
 	if updated {
 		err = this.logDeviceHistory(devicelog)
+		if err != nil {
+			return err
+		}
 	}
+	if time.Since(devicelog.Time) < time.Hour {
+		this.handleNotifications(devicelog)
+	} else if this.config.Debug {
+		log.Printf("DEBUG: devicelog older than an our -> ignore for handleNotifications")
+	}
+
 	return err
 }

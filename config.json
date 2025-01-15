@@ -3,6 +3,9 @@
   "MongoTable": "connectionlog",
   "DeviceStateCollection": "devicestate",
   "HubStateCollection": "gatewaystate",
+  "DeviceOfflineNotificationInfoCollection": "device_offline_notification_info",
+
+  "NotificationUrl": "http://api.notifier:5000",
 
   "DeviceLogTopic": "device_log",
   "HubLogTopic": "gateway_log",
@@ -17,5 +20,6 @@
 
   "KafkaUrl": "kafka:9092",
 
-  "Debug": true
+  "Debug": true,
+  "RoundTime": "1m"
 }
