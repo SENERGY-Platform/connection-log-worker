@@ -21,5 +21,7 @@
   "KafkaUrl": "kafka:9092",
 
   "Debug": true,
-  "RoundTime": "1m"
+  "RoundTime": "1m",
+
+  "DeviceRepositoryUrl": "http://api.device-repository:8080"
 }

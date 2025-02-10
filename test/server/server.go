@@ -20,6 +20,8 @@ import (
 	"context"
 	"github.com/SENERGY-Platform/connection-log-worker/lib/config"
 	"log"
+	"net/http"
+	"net/http/httptest"
 	"runtime/debug"
 	"sync"
 )
@@ -44,6 +46,17 @@ func New(ctx context.Context, wg *sync.WaitGroup, defaults config.Config) (confi
 		debug.PrintStack()
 		return config, "", err
 	}
+
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		w.WriteHeader(http.StatusOK)
+	}))
+	wg.Add(1)
+	go func() {
+		defer wg.Done()
+		defer server.Close()
+		<-ctx.Done()
+	}()
+	config.DeviceRepositoryUrl = server.URL
 
 	return config, connectionlogip, nil
 }
@@ -85,6 +98,17 @@ func NewPartial(ctx context.Context, wg *sync.WaitGroup, defaults config.Config)
 		return config, err
 	}
 	config.MongoUrl = "mongodb://" + mongoIp
+
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		w.WriteHeader(http.StatusOK)
+	}))
+	wg.Add(1)
+	go func() {
+		defer wg.Done()
+		defer server.Close()
+		<-ctx.Done()
+	}()
+	config.DeviceRepositoryUrl = server.URL
 
 	return config, nil
 }

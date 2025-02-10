@@ -52,6 +52,8 @@ type Config struct {
 	Debug        bool
 
 	RoundTime string
+
+	DeviceRepositoryUrl string
 }
 
 // loads config from json in location and used environment variables (e.g KafkaUrl --> ZOOKEEPER_URL)

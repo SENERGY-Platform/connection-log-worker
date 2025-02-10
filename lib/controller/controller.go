@@ -19,6 +19,7 @@ package controller
 import (
 	"github.com/SENERGY-Platform/connection-log-worker/lib/config"
 	"github.com/SENERGY-Platform/connection-log-worker/lib/model"
+	devicerepo "github.com/SENERGY-Platform/device-repository/lib/client"
 	"github.com/influxdata/influxdb/client/v2"
 	"gopkg.in/mgo.v2"
 	"log"
@@ -33,6 +34,7 @@ type Controller struct {
 	influxdbInstance client.Client
 	influxdbOnce     sync.Once
 	roundTime        time.Duration
+	deviceRepo       devicerepo.Interface
 }
 
 func New(config config.Config) *Controller {
@@ -40,12 +42,16 @@ func New(config config.Config) *Controller {
 	if err != nil {
 		roundTime = time.Minute
 	}
-	return &Controller{config: config, roundTime: roundTime}
+	return &Controller{config: config, roundTime: roundTime, deviceRepo: devicerepo.NewClient(config.DeviceRepositoryUrl, nil)}
 }
 
 func (this *Controller) LogHub(hublog model.HubLog) error {
 	if this.config.Debug {
 		log.Println("DEBUG: handle hub log update", hublog)
+	}
+	err, _ := this.deviceRepo.SetHubConnectionState(devicerepo.InternalAdminToken, hublog.Id, hublog.Connected)
+	if err != nil {
+		return err
 	}
 	updated, err := this.setHubState(hublog)
 	if err != nil {
@@ -60,6 +66,10 @@ func (this *Controller) LogHub(hublog model.HubLog) error {
 func (this *Controller) LogDevice(devicelog model.DeviceLog) error {
 	if this.config.Debug {
 		log.Printf("DEBUG: handle device log update %#v\n", devicelog)
+	}
+	err, _ := this.deviceRepo.SetDeviceConnectionState(devicerepo.InternalAdminToken, devicelog.Id, devicelog.Connected)
+	if err != nil {
+		return err
 	}
 	updated, err := this.setDeviceState(devicelog)
 	if err != nil {
