@@ -49,9 +49,11 @@ func (this *Controller) LogHub(hublog model.HubLog) error {
 	if this.config.Debug {
 		log.Println("DEBUG: handle hub log update", hublog)
 	}
-	err, _ := this.deviceRepo.SetHubConnectionState(devicerepo.InternalAdminToken, hublog.Id, hublog.Connected)
-	if err != nil {
-		return err
+	if this.config.DeviceRepositoryUrl != "" && this.config.DeviceRepositoryUrl != "-" {
+		err, _ := this.deviceRepo.SetHubConnectionState(devicerepo.InternalAdminToken, hublog.Id, hublog.Connected)
+		if err != nil {
+			return err
+		}
 	}
 	updated, err := this.setHubState(hublog)
 	if err != nil {
@@ -67,9 +69,11 @@ func (this *Controller) LogDevice(devicelog model.DeviceLog) error {
 	if this.config.Debug {
 		log.Printf("DEBUG: handle device log update %#v\n", devicelog)
 	}
-	err, _ := this.deviceRepo.SetDeviceConnectionState(devicerepo.InternalAdminToken, devicelog.Id, devicelog.Connected)
-	if err != nil {
-		return err
+	if this.config.DeviceRepositoryUrl != "" && this.config.DeviceRepositoryUrl != "-" {
+		err, _ := this.deviceRepo.SetDeviceConnectionState(devicerepo.InternalAdminToken, devicelog.Id, devicelog.Connected)
+		if err != nil {
+			return err
+		}
 	}
 	updated, err := this.setDeviceState(devicelog)
 	if err != nil {
