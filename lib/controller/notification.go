@@ -59,6 +59,7 @@ func (this *Controller) handleNotifications(devicelog model.DeviceLog) {
 			}
 			maxDur, err := time.ParseDuration(devicelog.MonitorConnectionState)
 			if err != nil {
+				this.sendMonitorParseErrorNotification(devicelog, err)
 				log.Println("ERROR: ParseDuration()", err)
 				return
 			}
@@ -151,7 +152,7 @@ func (this *Controller) sendOfflineNotification(devicelog model.DeviceLog, since
 	if err != nil {
 		return err
 	}
-	endpoint := this.config.NotificationUrl + "/notifications?ignore_duplicates_within_seconds=3600"
+	endpoint := this.config.NotificationUrl + "/notifications"
 	req, err := http.NewRequest("POST", endpoint, b)
 	if err != nil {
 		return err
@@ -168,4 +169,40 @@ func (this *Controller) sendOfflineNotification(devicelog model.DeviceLog, since
 		return fmt.Errorf("unexpected response status from notifier %v %v", resp.Status, string(respMsg))
 	}
 	return nil
+}
+
+func (this *Controller) sendMonitorParseErrorNotification(devicelog model.DeviceLog, err error) {
+	if this.config.Debug {
+		log.Printf("DEBUG: send parse error (%v) notification for %#v\n", err.Error(), devicelog)
+	}
+	b := new(bytes.Buffer)
+	err = json.NewEncoder(b).Encode(Notification{
+		UserId:  devicelog.DeviceOwner,
+		Title:   "Device monitor_connection_state Attribute Invalid",
+		Message: fmt.Sprintf("device %v (%v) has an invalid monitor_connection_state attribute (allowed time-shorthands are s,m,h); error = %v", devicelog.DeviceName, devicelog.Id, err.Error()),
+		Topic:   "device_offline",
+	})
+	if err != nil {
+		log.Println("ERROR: sendMonitorParseErrorNotification()", err)
+		return
+	}
+	endpoint := this.config.NotificationUrl + "/notifications?ignore_duplicates_within_seconds=86400"
+	req, err := http.NewRequest("POST", endpoint, b)
+	if err != nil {
+		log.Println("ERROR: sendMonitorParseErrorNotification()", err)
+		return
+	}
+	ctx, _ := context.WithTimeout(context.Background(), 5*time.Second)
+	req.WithContext(ctx)
+	req.Header.Set("Content-Type", "application/json")
+	resp, err := http.DefaultClient.Do(req)
+	if err != nil {
+		log.Println("ERROR: sendMonitorParseErrorNotification()", err)
+		return
+	}
+	if resp.StatusCode >= 300 {
+		respMsg, _ := io.ReadAll(resp.Body)
+		log.Printf("ERROR: unexpected response status from notifier %v %v\n", resp.Status, string(respMsg))
+	}
+	return
 }
