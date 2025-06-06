@@ -54,6 +54,8 @@ type Config struct {
 	RoundTime string
 
 	DeviceRepositoryUrl string
+
+	ApiDocsProviderBaseUrl string
 }
 
 // loads config from json in location and used environment variables (e.g KafkaUrl --> ZOOKEEPER_URL)

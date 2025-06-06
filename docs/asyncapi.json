@@ -1,0 +1,194 @@
+{
+    "asyncapi": "3.0.0",
+    "info": {
+        "title": "Connection Log Worker",
+        "version": ""
+    },
+    "servers": {
+        "kafka": {
+            "host": "kafka:9092",
+            "protocol": "kafka"
+        }
+    },
+    "channels": {
+        "device_log": {
+            "address": "device_log",
+            "messages": {
+                "publish.message": {
+                    "$ref": "#/components/messages/ModelDeviceLog"
+                }
+            }
+        },
+        "devices": {
+            "address": "devices",
+            "messages": {
+                "publish.message": {
+                    "$ref": "#/components/messages/ModelDeviceCommand"
+                }
+            }
+        },
+        "gateway_log": {
+            "address": "gateway_log",
+            "messages": {
+                "publish.message": {
+                    "$ref": "#/components/messages/ModelHubLog"
+                }
+            }
+        },
+        "hubs": {
+            "address": "hubs",
+            "messages": {
+                "publish.message": {
+                    "$ref": "#/components/messages/ModelHubCommand"
+                }
+            }
+        }
+    },
+    "operations": {
+        "device_log.publish": {
+            "action": "receive",
+            "channel": {
+                "$ref": "#/channels/device_log"
+            },
+            "messages": [
+                {
+                    "$ref": "#/channels/device_log/messages/publish.message"
+                }
+            ]
+        },
+        "devices.publish": {
+            "action": "receive",
+            "channel": {
+                "$ref": "#/channels/devices"
+            },
+            "messages": [
+                {
+                    "$ref": "#/channels/devices/messages/publish.message"
+                }
+            ]
+        },
+        "gateway_log.publish": {
+            "action": "receive",
+            "channel": {
+                "$ref": "#/channels/gateway_log"
+            },
+            "messages": [
+                {
+                    "$ref": "#/channels/gateway_log/messages/publish.message"
+                }
+            ]
+        },
+        "hubs.publish": {
+            "action": "receive",
+            "channel": {
+                "$ref": "#/channels/hubs"
+            },
+            "messages": [
+                {
+                    "$ref": "#/channels/hubs/messages/publish.message"
+                }
+            ]
+        }
+    },
+    "components": {
+        "schemas": {
+            "ModelDeviceCommand": {
+                "properties": {
+                    "command": {
+                        "type": "string"
+                    },
+                    "id": {
+                        "type": "string"
+                    },
+                    "owner": {
+                        "type": "string"
+                    }
+                },
+                "type": "object"
+            },
+            "ModelDeviceLog": {
+                "properties": {
+                    "connected": {
+                        "type": "boolean"
+                    },
+                    "device_name": {
+                        "type": "string"
+                    },
+                    "device_owner": {
+                        "type": "string"
+                    },
+                    "id": {
+                        "type": "string"
+                    },
+                    "monitor_connection_state": {
+                        "type": "string"
+                    },
+                    "time": {
+                        "format": "date-time",
+                        "type": "string"
+                    }
+                },
+                "type": "object"
+            },
+            "ModelHubCommand": {
+                "properties": {
+                    "command": {
+                        "type": "string"
+                    },
+                    "id": {
+                        "type": "string"
+                    },
+                    "owner": {
+                        "type": "string"
+                    }
+                },
+                "type": "object"
+            },
+            "ModelHubLog": {
+                "properties": {
+                    "connected": {
+                        "type": "boolean"
+                    },
+                    "id": {
+                        "type": "string"
+                    },
+                    "time": {
+                        "format": "date-time",
+                        "type": "string"
+                    }
+                },
+                "type": "object"
+            }
+        },
+        "messages": {
+            "ModelDeviceCommand": {
+                "payload": {
+                    "$ref": "#/components/schemas/ModelDeviceCommand"
+                },
+                "name": "DeviceCommand",
+                "title": "DeviceCommand"
+            },
+            "ModelDeviceLog": {
+                "payload": {
+                    "$ref": "#/components/schemas/ModelDeviceLog"
+                },
+                "name": "DeviceLog",
+                "title": "DeviceLog"
+            },
+            "ModelHubCommand": {
+                "payload": {
+                    "$ref": "#/components/schemas/ModelHubCommand"
+                },
+                "name": "HubCommand",
+                "title": "HubCommand"
+            },
+            "ModelHubLog": {
+                "payload": {
+                    "$ref": "#/components/schemas/ModelHubLog"
+                },
+                "name": "HubLog",
+                "title": "HubLog"
+            }
+        }
+    }
+}
