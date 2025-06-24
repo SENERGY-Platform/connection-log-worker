@@ -23,5 +23,7 @@
   "Debug": true,
   "RoundTime": "1m",
 
-  "DeviceRepositoryUrl": "http://api.device-repository:8080"
+  "DeviceRepositoryUrl": "http://api.device-repository:8080",
+
+  "InitTopics": false
 }

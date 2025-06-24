@@ -48,12 +48,15 @@ func TestNotifications(t *testing.T) {
 	}
 	defaultConfig.Debug = true
 	defaultConfig.RoundTime = "1s"
+	defaultConfig.InitTopics = true
 
 	conf, err := server.NewPartial(ctx, wg, defaultConfig)
 	if err != nil {
 		t.Error(err)
 		return
 	}
+
+	conf.InitTopics = true
 
 	mux := sync.Mutex{}
 	notifications := []string{}

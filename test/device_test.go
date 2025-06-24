@@ -54,6 +54,8 @@ func TestDevice(t *testing.T) {
 		t.Error(err)
 		return
 	}
+	config.InitTopics = true
+	
 	connectionlog := "http://" + connectionlogip + ":8080"
 	log.Println("DEBUG: connection-log-api-url:", connectionlog)
 
