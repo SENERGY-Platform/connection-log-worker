@@ -20,14 +20,15 @@ import (
 	"context"
 	"errors"
 	"fmt"
-	"github.com/testcontainers/testcontainers-go/wait"
 	"io"
 	"log"
 	"net"
 	"time"
+
+	"github.com/testcontainers/testcontainers-go/wait"
 )
 
-func getFreePort() (int, error) {
+func GetFreePort() (int, error) {
 	addr, err := net.ResolveTCPAddr("tcp", "localhost:0")
 	if err != nil {
 		return 0, err

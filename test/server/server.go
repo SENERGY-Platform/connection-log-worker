@@ -18,12 +18,13 @@ package server
 
 import (
 	"context"
-	"github.com/SENERGY-Platform/connection-log-worker/lib/config"
 	"log"
 	"net/http"
 	"net/http/httptest"
 	"runtime/debug"
 	"sync"
+
+	"github.com/SENERGY-Platform/connection-log-worker/lib/config"
 )
 
 func New(ctx context.Context, wg *sync.WaitGroup, defaults config.Config) (config config.Config, connectionlogip string, err error) {
@@ -64,15 +65,7 @@ func New(ctx context.Context, wg *sync.WaitGroup, defaults config.Config) (confi
 func NewPartial(ctx context.Context, wg *sync.WaitGroup, defaults config.Config) (config config.Config, err error) {
 	config = defaults
 
-	_, zk, err := Zookeeper(ctx, wg)
-	if err != nil {
-		log.Println("ERROR:", err)
-		debug.PrintStack()
-		return config, err
-	}
-	zkUrl := zk + ":2181"
-
-	config.KafkaUrl, err = Kafka(ctx, wg, zkUrl)
+	config.KafkaUrl, err = Kafka(ctx, wg)
 	if err != nil {
 		log.Println("ERROR:", err)
 		debug.PrintStack()
