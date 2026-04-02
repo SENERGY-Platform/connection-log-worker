@@ -19,17 +19,18 @@ package main
 import (
 	"context"
 	"flag"
-	"github.com/SENERGY-Platform/api-docs-provider/lib/client"
-	"github.com/SENERGY-Platform/connection-log-worker/docs"
-	"github.com/SENERGY-Platform/connection-log-worker/lib"
-	"github.com/SENERGY-Platform/connection-log-worker/lib/config"
-	"github.com/SENERGY-Platform/connection-log-worker/lib/source/consumer"
 	"log"
 	"net/http"
 	"os"
 	"os/signal"
 	"syscall"
 	"time"
+
+	"github.com/SENERGY-Platform/api-docs-provider/lib/client"
+	"github.com/SENERGY-Platform/connection-log-worker/docs"
+	"github.com/SENERGY-Platform/connection-log-worker/lib"
+	"github.com/SENERGY-Platform/connection-log-worker/lib/config"
+	"github.com/SENERGY-Platform/connection-log-worker/lib/source/consumer"
 )
 
 func main() {
@@ -59,7 +60,7 @@ func main() {
 	shutdown := make(chan os.Signal, 1)
 	signal.Notify(shutdown, syscall.SIGINT, syscall.SIGTERM, syscall.SIGKILL)
 	sig := <-shutdown
-	log.Println("received shutdown signal", sig)
+	conf.GetLogger().Info("received shutdown signal", "signal", sig)
 }
 
 func PublishAsyncApiDoc(conf config.Config) error {

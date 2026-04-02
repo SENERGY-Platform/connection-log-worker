@@ -25,5 +25,7 @@
 
   "DeviceRepositoryUrl": "http://api.device-repository:8080",
 
-  "InitTopics": false
+  "InitTopics": false,
+
+  "LogLevel": "info"
 }

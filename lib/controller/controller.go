@@ -17,14 +17,14 @@
 package controller
 
 import (
+	"sync"
+	"time"
+
 	"github.com/SENERGY-Platform/connection-log-worker/lib/config"
 	"github.com/SENERGY-Platform/connection-log-worker/lib/model"
 	devicerepo "github.com/SENERGY-Platform/device-repository/lib/client"
 	"github.com/influxdata/influxdb/client/v2"
 	"gopkg.in/mgo.v2"
-	"log"
-	"sync"
-	"time"
 )
 
 type Controller struct {
@@ -46,9 +46,7 @@ func New(config config.Config) *Controller {
 }
 
 func (this *Controller) LogHub(hublog model.HubLog) error {
-	if this.config.Debug {
-		log.Println("DEBUG: handle hub log update", hublog)
-	}
+	this.config.GetLogger().Debug("handle hub log update", "hub-log", hublog)
 	if this.config.DeviceRepositoryUrl != "" && this.config.DeviceRepositoryUrl != "-" {
 		err, _ := this.deviceRepo.SetHubConnectionState(devicerepo.InternalAdminToken, hublog.Id, hublog.Connected)
 		if err != nil {
@@ -66,9 +64,7 @@ func (this *Controller) LogHub(hublog model.HubLog) error {
 }
 
 func (this *Controller) LogDevice(devicelog model.DeviceLog) error {
-	if this.config.Debug {
-		log.Printf("DEBUG: handle device log update %#v\n", devicelog)
-	}
+	this.config.GetLogger().Debug("handle device log update", "device-log", devicelog)
 	if this.config.DeviceRepositoryUrl != "" && this.config.DeviceRepositoryUrl != "-" {
 		err, _ := this.deviceRepo.SetDeviceConnectionState(devicerepo.InternalAdminToken, devicelog.Id, devicelog.Connected)
 		if err != nil {
@@ -87,8 +83,8 @@ func (this *Controller) LogDevice(devicelog model.DeviceLog) error {
 	}
 	if time.Since(devicelog.Time) < time.Hour {
 		this.handleNotifications(devicelog)
-	} else if this.config.Debug {
-		log.Printf("DEBUG: devicelog older than an our -> ignore for handleNotifications")
+	} else {
+		this.config.GetLogger().Debug("devicelog older than an hour -> ignore for handleNotifications")
 	}
 
 	return err

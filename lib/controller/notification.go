@@ -21,26 +21,27 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
-	"github.com/SENERGY-Platform/connection-log-worker/lib/model"
-	"gopkg.in/mgo.v2"
-	"gopkg.in/mgo.v2/bson"
 	"io"
 	"log"
 	"net/http"
 	"time"
+
+	"github.com/SENERGY-Platform/connection-log-worker/lib/model"
+	"gopkg.in/mgo.v2"
+	"gopkg.in/mgo.v2/bson"
 )
 
 func (this *Controller) handleNotifications(devicelog model.DeviceLog) {
 	if devicelog.Connected {
 		err := this.removeDeviceOfflineNotificationInfos(devicelog.Id)
 		if err != nil {
-			log.Println("ERROR: removeDeviceOfflineNotificationInfos()", err)
+			this.config.GetLogger().Error("unable to remove offline notification infos", "device-id", devicelog.Id, "error", err)
 			return
 		}
 	} else {
 		info, exists, err := this.getDeviceOfflineNotificationInfos(devicelog.Id)
 		if err != nil {
-			log.Println("ERROR: removeDeviceOfflineNotificationInfos()", err)
+			this.config.GetLogger().Error("unable to get offline notification infos", "device-id", devicelog.Id, "error", err)
 			return
 		}
 		if !exists {
@@ -50,7 +51,7 @@ func (this *Controller) handleNotifications(devicelog model.DeviceLog) {
 				Notified:     false,
 			})
 			if err != nil {
-				log.Println("ERROR: setDeviceOfflineNotificationInfos()", err)
+				this.config.GetLogger().Error("unable to set offline notification infos", "device-id", devicelog.Id, "error", err)
 				return
 			}
 		} else {
@@ -60,20 +61,20 @@ func (this *Controller) handleNotifications(devicelog model.DeviceLog) {
 			maxDur, err := time.ParseDuration(devicelog.MonitorConnectionState)
 			if err != nil {
 				this.sendMonitorParseErrorNotification(devicelog, err)
-				log.Println("ERROR: ParseDuration()", err)
+				this.config.GetLogger().Error("unable to parse MonitorConnectionState as duration", "device-id", devicelog.Id, "error", err)
 				return
 			}
 			since := time.Since(time.Unix(info.OfflineSince, 0))
 			if since > maxDur {
 				err = this.sendOfflineNotification(devicelog, since)
 				if err != nil {
-					log.Println("ERROR: unable to send notification", err)
+					this.config.GetLogger().Error("unable to send notification", "device-id", devicelog.Id, "error", err)
 					return
 				}
 				info.Notified = true
 				err = this.setDeviceOfflineNotificationInfos(info)
 				if err != nil {
-					log.Println("ERROR: unable to update info with notified flag", err)
+					this.config.GetLogger().Error("unable to update info with notified flag", "device-id", devicelog.Id, "error", err)
 					return
 				}
 			}
@@ -139,9 +140,7 @@ type Notification struct {
 }
 
 func (this *Controller) sendOfflineNotification(devicelog model.DeviceLog, since time.Duration) error {
-	if this.config.Debug {
-		log.Printf("DEBUG: send notification for %#v\n", devicelog)
-	}
+	this.config.GetLogger().Debug("send offline notification", "device-log", fmt.Sprintf("%#v", devicelog))
 	b := new(bytes.Buffer)
 	err := json.NewEncoder(b).Encode(Notification{
 		UserId:  devicelog.DeviceOwner,
@@ -172,9 +171,7 @@ func (this *Controller) sendOfflineNotification(devicelog model.DeviceLog, since
 }
 
 func (this *Controller) sendMonitorParseErrorNotification(devicelog model.DeviceLog, err error) {
-	if this.config.Debug {
-		log.Printf("DEBUG: send parse error (%v) notification for %#v\n", err.Error(), devicelog)
-	}
+	this.config.GetLogger().Debug("send parse error notification", "device-log", fmt.Sprintf("%#v", devicelog))
 	b := new(bytes.Buffer)
 	err = json.NewEncoder(b).Encode(Notification{
 		UserId:  devicelog.DeviceOwner,
@@ -183,13 +180,13 @@ func (this *Controller) sendMonitorParseErrorNotification(devicelog model.Device
 		Topic:   "device_offline",
 	})
 	if err != nil {
-		log.Println("ERROR: sendMonitorParseErrorNotification()", err)
+		this.config.GetLogger().Error("unable to encode notification", "error", err)
 		return
 	}
 	endpoint := this.config.NotificationUrl + "/notifications?ignore_duplicates_within_seconds=86400"
 	req, err := http.NewRequest("POST", endpoint, b)
 	if err != nil {
-		log.Println("ERROR: sendMonitorParseErrorNotification()", err)
+		this.config.GetLogger().Error("unable to create notification request", "error", err)
 		return
 	}
 	ctx, _ := context.WithTimeout(context.Background(), 5*time.Second)
@@ -197,12 +194,12 @@ func (this *Controller) sendMonitorParseErrorNotification(devicelog model.Device
 	req.Header.Set("Content-Type", "application/json")
 	resp, err := http.DefaultClient.Do(req)
 	if err != nil {
-		log.Println("ERROR: sendMonitorParseErrorNotification()", err)
+		this.config.GetLogger().Error("unable to send notification", "error", err)
 		return
 	}
 	if resp.StatusCode >= 300 {
 		respMsg, _ := io.ReadAll(resp.Body)
-		log.Printf("ERROR: unexpected response status from notifier %v %v\n", resp.Status, string(respMsg))
+		this.config.GetLogger().Error("unexpected response status from notifier", "status-code", resp.StatusCode, "error", string(respMsg))
 	}
 	return
 }

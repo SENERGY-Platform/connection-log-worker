@@ -18,22 +18,20 @@ package consumer
 
 import (
 	"context"
+
 	"github.com/SENERGY-Platform/connection-log-worker/lib/config"
 	"github.com/SENERGY-Platform/connection-log-worker/lib/source/consumer/listener"
-	"log"
 )
 
 func Start(ctx context.Context, config config.Config, control listener.Controller, runtimeErrorHandler func(err error, consumer *Consumer)) (err error) {
 	for _, factory := range listener.Factories {
 		topic, handler, err := factory(config, control)
 		if err != nil {
-			log.Println("ERROR: listener.factory", topic, err)
+			config.GetLogger().Error("unable to create listener", "topic", topic, "error", err)
 			return err
 		}
 		err = RunConsumer(ctx, config.KafkaUrl, config.KafkaGroupId, topic, config.InitTopics, func(topic string, msg []byte) error {
-			if config.Debug {
-				log.Println("DEBUG: consume", topic, string(msg))
-			}
+			config.GetLogger().Debug("consume", "topic", topic, "msg", string(msg))
 			return handler(msg)
 		}, runtimeErrorHandler)
 		if err != nil {
