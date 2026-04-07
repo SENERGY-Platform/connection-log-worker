@@ -18,10 +18,14 @@ package server
 
 import (
 	"context"
+	"fmt"
+	"io"
+	"log"
+	"strings"
+	"sync"
+
 	"github.com/testcontainers/testcontainers-go"
 	"github.com/testcontainers/testcontainers-go/wait"
-	"log"
-	"sync"
 )
 
 func Connectionlog(ctx context.Context, wg *sync.WaitGroup, mongourl string, influxurl string, permV2Url string) (hostport string, containerip string, err error) {
@@ -41,6 +45,7 @@ func Connectionlog(ctx context.Context, wg *sync.WaitGroup, mongourl string, inf
 				"INFLUXDB_PW":        "pw",
 				"PERMISSIONS_V2_URL": permV2Url,
 			},
+			AlwaysPullImage: true,
 		},
 		Started: true,
 	})
@@ -51,8 +56,20 @@ func Connectionlog(ctx context.Context, wg *sync.WaitGroup, mongourl string, inf
 	wg.Add(1)
 	go func() {
 		defer wg.Done()
+		defer func() {
+			log.Println("DEBUG: remove container connectionlog", c.Terminate(context.Background()))
+		}()
 		<-ctx.Done()
-		log.Println("DEBUG: remove container connectionlog", c.Terminate(context.Background()))
+		reader, err := c.Logs(context.Background())
+		if err != nil {
+			log.Println("ERROR: unable to get container log")
+			return
+		}
+		buf := new(strings.Builder)
+		io.Copy(buf, reader)
+		fmt.Println("CONNECTIONLOG LOGS: ------------------------------------------")
+		fmt.Println(buf.String())
+		fmt.Println("\n---------------------------------------------------------------")
 	}()
 
 	containerip, err = c.ContainerIP(ctx)

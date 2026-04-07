@@ -19,6 +19,12 @@ package test
 import (
 	"context"
 	"encoding/json"
+	"log"
+	"reflect"
+	"sync"
+	"testing"
+	"time"
+
 	"github.com/SENERGY-Platform/connection-log-worker/lib"
 	"github.com/SENERGY-Platform/connection-log-worker/lib/config"
 	"github.com/SENERGY-Platform/connection-log-worker/lib/model"
@@ -26,14 +32,10 @@ import (
 	"github.com/SENERGY-Platform/connection-log-worker/lib/source/util"
 	"github.com/SENERGY-Platform/connection-log-worker/test/helper"
 	"github.com/SENERGY-Platform/connection-log-worker/test/server"
+	"github.com/SENERGY-Platform/models/go/models"
 	"github.com/google/uuid"
 	"github.com/influxdata/influxdb/client/v2"
 	"github.com/segmentio/kafka-go"
-	"log"
-	"reflect"
-	"sync"
-	"testing"
-	"time"
 )
 
 func TestDevice(t *testing.T) {
@@ -55,7 +57,7 @@ func TestDevice(t *testing.T) {
 		return
 	}
 	config.InitTopics = true
-	
+
 	connectionlog := "http://" + connectionlogip + ":8080"
 	log.Println("DEBUG: connection-log-api-url:", connectionlog)
 
@@ -116,18 +118,21 @@ func sendDeviceDelete(t *testing.T, config config.Config, id string) {
 		Id:      id,
 	})
 	if err != nil {
-		t.Fatal(err)
+		t.Error(err)
+		return
 	}
 	broker, err := util.GetBroker(config.KafkaUrl)
 	if err != nil {
-		t.Fatal(err)
+		t.Error(err)
+		return
 	}
 	if len(broker) == 0 {
 		t.Fatal(broker)
 	}
 	producer, err := helper.GetProducer(broker, config.DeviceTopic, true)
 	if err != nil {
-		t.Fatal(err)
+		t.Error(err)
+		return
 	}
 	defer producer.Close()
 	defer time.Sleep(2 * time.Second)
@@ -140,7 +145,8 @@ func sendDeviceDelete(t *testing.T, config config.Config, id string) {
 		},
 	)
 	if err != nil {
-		t.Fatal(err)
+		t.Error(err)
+		return
 	}
 }
 
@@ -220,7 +226,8 @@ func checkDeviceHistorys(t *testing.T, connectionlogUrl string, ids []string, co
 	result := []client.Result{}
 	err := helper.AdminPost(connectionlogUrl+"/intern/history/device/1h", ids, &result)
 	if err != nil {
-		t.Fatal(err)
+		t.Error(err)
+		return
 	}
 	if len(result) != 1 {
 		t.Fatal(len(result), result)
@@ -247,7 +254,8 @@ func checkDeviceStates(t *testing.T, connectionlogUrl string, ids []string, expe
 	result := map[string]bool{}
 	err := helper.AdminPost(connectionlogUrl+"/intern/state/device/check", ids, &result)
 	if err != nil {
-		t.Fatal(err)
+		t.Error(err)
+		return
 	}
 	if !reflect.DeepEqual(expected, result) {
 		t.Error(result, "\n", expected)
@@ -267,7 +275,8 @@ func checkHubHistory(t *testing.T, connectionlogUrl string, id string, count int
 	result := []client.Result{}
 	err := helper.AdminPost(connectionlogUrl+"/intern/history/gateway/1h", []string{id}, &result)
 	if err != nil {
-		t.Fatal(err)
+		t.Error(err)
+		return
 	}
 	if len(result) != 1 {
 		t.Fatal(len(result), result)
@@ -287,7 +296,8 @@ func checkHubState(t *testing.T, connectionlogUrl string, id string, state bool)
 	result := map[string]bool{}
 	err := helper.AdminPost(connectionlogUrl+"/intern/state/gateway/check", []string{id}, &result)
 	if err != nil {
-		t.Fatal(err)
+		t.Error(err)
+		return
 	}
 	if len(result) != 1 || result[id] != state {
 		t.Fatal(result)
@@ -301,18 +311,21 @@ func sendLog(t *testing.T, kafkaUrl string, topic string, state bool, id string)
 		Time:      time.Now(),
 	})
 	if err != nil {
-		t.Fatal(err)
+		t.Error(err)
+		return
 	}
 	broker, err := util.GetBroker(kafkaUrl)
 	if err != nil {
-		t.Fatal(err)
+		t.Error(err)
+		return
 	}
 	if len(broker) == 0 {
 		t.Fatal(broker)
 	}
 	producer, err := helper.GetProducer(broker, topic, true)
 	if err != nil {
-		t.Fatal(err)
+		t.Error(err)
+		return
 	}
 	defer producer.Close()
 	defer time.Sleep(2 * time.Second)
@@ -325,14 +338,16 @@ func sendLog(t *testing.T, kafkaUrl string, topic string, state bool, id string)
 		},
 	)
 	if err != nil {
-		t.Fatal(err)
+		t.Error(err)
+		return
 	}
 }
 
 func sendFullDeviceLog(t *testing.T, producer *kafka.Writer, deviceLog model.DeviceLog) {
 	b, err := json.Marshal(deviceLog)
 	if err != nil {
-		t.Fatal(err)
+		t.Error(err)
+		return
 	}
 	err = producer.WriteMessages(
 		context.Background(),
@@ -343,22 +358,25 @@ func sendFullDeviceLog(t *testing.T, producer *kafka.Writer, deviceLog model.Dev
 		},
 	)
 	if err != nil {
-		t.Fatal(err)
+		t.Error(err)
+		return
 	}
 }
 
 func createDevice(t *testing.T, kafkaUrl string) (id string) {
-	id = uuid.NewString()
+	id = models.DEVICE_PREFIX + uuid.NewString()
 	broker, err := util.GetBroker(kafkaUrl)
 	if err != nil {
-		t.Fatal(err)
+		t.Error(err)
+		return
 	}
 	if len(broker) == 0 {
 		t.Fatal(broker)
 	}
 	producer, err := helper.GetProducer(broker, "devices", true)
 	if err != nil {
-		t.Fatal(err)
+		t.Error(err)
+		return
 	}
 	defer producer.Close()
 	defer time.Sleep(2 * time.Second)
@@ -371,23 +389,26 @@ func createDevice(t *testing.T, kafkaUrl string) (id string) {
 		},
 	)
 	if err != nil {
-		t.Fatal(err)
+		t.Error(err)
+		return
 	}
 	return id
 }
 
 func createHub(t *testing.T, kafkaUrl string) (id string) {
-	id = uuid.NewString()
+	id = models.HUB_PREFIX + uuid.NewString()
 	broker, err := util.GetBroker(kafkaUrl)
 	if err != nil {
-		t.Fatal(err)
+		t.Error(err)
+		return
 	}
 	if len(broker) == 0 {
 		t.Fatal(broker)
 	}
 	producer, err := helper.GetProducer(broker, "hubs", true)
 	if err != nil {
-		t.Fatal(err)
+		t.Error(err)
+		return
 	}
 	defer producer.Close()
 	defer time.Sleep(2 * time.Second)
@@ -400,7 +421,8 @@ func createHub(t *testing.T, kafkaUrl string) (id string) {
 		},
 	)
 	if err != nil {
-		t.Fatal(err)
+		t.Error(err)
+		return
 	}
 
 	return id

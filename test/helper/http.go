@@ -19,6 +19,7 @@ package helper
 import (
 	"bytes"
 	"encoding/json"
+	"fmt"
 	"net/http"
 	"runtime/debug"
 )
@@ -70,7 +71,7 @@ func AdminPost(url string, msg interface{}, result interface{}) (err error) {
 		buf := new(bytes.Buffer)
 		buf.ReadFrom(resp.Body)
 		debug.PrintStack()
-		return err
+		return fmt.Errorf("unexpected response status %v %v", resp.Status, buf.String())
 	}
 	err = json.NewDecoder(resp.Body).Decode(&result)
 	return err
