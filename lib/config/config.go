@@ -82,6 +82,7 @@ func Load(location string) (config Config, err error) {
 		return config, error
 	}
 	handleEnvironmentVars(&config)
+	config.GetLogger()
 	return config, nil
 }
 
