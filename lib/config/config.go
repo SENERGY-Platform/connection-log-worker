@@ -52,9 +52,11 @@ type Config struct {
 	DeviceTopic    string
 	HubTopic       string
 
-	KafkaUrl     string
-	KafkaGroupId string
-	Debug        bool
+	KafkaUrl           string
+	KafkaGroupId       string
+	KafkaMaxMessages   int
+	KafkaMessageWindow int64
+	Debug              bool
 
 	RoundTime string
 
