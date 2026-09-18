@@ -41,6 +41,9 @@ func (this *Controller) UpdateDevices(commands []model.DeviceCommand) error {
 		}
 		return false, ""
 	})
+	if len(ids) == 0 {
+		return nil
+	}
 	err := this.deleteDeviceLogs(ids)
 	if err != nil {
 		return err

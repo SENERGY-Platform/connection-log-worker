@@ -38,6 +38,9 @@ func (this *Controller) UpdateHubs(commands []model.HubCommand) error {
 		}
 		return false, ""
 	})
+	if len(ids) == 0 {
+		return nil
+	}
 	err := this.deleteGatewayLogs(ids)
 	if err != nil {
 		return err
