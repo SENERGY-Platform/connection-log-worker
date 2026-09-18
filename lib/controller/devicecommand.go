@@ -17,6 +17,9 @@
 package controller
 
 import (
+	"maps"
+	"slices"
+
 	"github.com/SENERGY-Platform/connection-log-worker/lib/model"
 )
 
@@ -29,4 +32,29 @@ func (this *Controller) UpdateDevice(command model.DeviceCommand) error {
 		return this.deleteDeviceState(command.Id)
 	}
 	return nil
+}
+
+func (this *Controller) UpdateDevices(commands []model.DeviceCommand) error {
+	ids := getUniqueStringCondition(commands, func(i model.DeviceCommand) (bool, string) {
+		if i.Command == "DELETE" {
+			return true, i.Id
+		}
+		return false, ""
+	})
+	err := this.deleteDeviceLogs(ids)
+	if err != nil {
+		return err
+	}
+	return this.deleteDeviceStates(ids)
+}
+
+func getUniqueStringCondition[T any](sl []T, valFunc func(i T) (bool, string)) []string {
+	tmp := make(map[string]struct{})
+	for _, i := range sl {
+		ok, val := valFunc(i)
+		if ok {
+			tmp[val] = struct{}{}
+		}
+	}
+	return slices.Collect(maps.Keys(tmp))
 }

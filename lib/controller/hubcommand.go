@@ -30,3 +30,17 @@ func (this *Controller) UpdateHub(command model.HubCommand) error {
 	}
 	return nil
 }
+
+func (this *Controller) UpdateHubs(commands []model.HubCommand) error {
+	ids := getUniqueStringCondition(commands, func(i model.HubCommand) (bool, string) {
+		if i.Command == "DELETE" {
+			return true, i.Id
+		}
+		return false, ""
+	})
+	err := this.deleteGatewayLogs(ids)
+	if err != nil {
+		return err
+	}
+	return this.deleteHubStates(ids)
+}
