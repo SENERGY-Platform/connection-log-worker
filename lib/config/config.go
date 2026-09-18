@@ -58,7 +58,7 @@ type Config struct {
 	KafkaMessageWindow int64
 	Debug              bool
 
-	BulkMode bool
+	BatchMode bool
 
 	RoundTime string
 

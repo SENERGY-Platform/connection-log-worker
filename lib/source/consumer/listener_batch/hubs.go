@@ -14,7 +14,7 @@
  * limitations under the License.
  */
 
-package listener_bulk
+package listener_batch
 
 import (
 	"encoding/json"
@@ -24,20 +24,20 @@ import (
 )
 
 func init() {
-	Factories = append(Factories, DevicesListenerFactory)
+	Factories = append(Factories, HubsListenerFactory)
 }
 
-func DevicesListenerFactory(config config.Config, control Controller) (topic string, listener Listener, err error) {
-	return config.DeviceTopic, func(messages [][]byte) (err error) {
-		var commands []model.DeviceCommand
+func HubsListenerFactory(config config.Config, control Controller) (topic string, listener Listener, err error) {
+	return config.HubTopic, func(messages [][]byte) (err error) {
+		var commands []model.HubCommand
 		for _, message := range messages {
-			var command model.DeviceCommand
+			var command model.HubCommand
 			err = json.Unmarshal(message, &command)
 			if err != nil {
 				return
 			}
 			commands = append(commands, command)
 		}
-		return control.UpdateDevices(commands)
+		return control.UpdateHubs(commands)
 	}, nil
 }

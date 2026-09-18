@@ -28,7 +28,7 @@ func Start(ctx context.Context, config config.Config, runtimeErrorHandler func(e
 	return consumer.Start(ctx, config, controller.New(config), runtimeErrorHandler)
 }
 
-func StartBulk(
+func StartBatch(
 	ctx context.Context,
 	config config.Config,
 	runtimeErrorHandler func(err error, consumer *consumer.BatchConsumer),

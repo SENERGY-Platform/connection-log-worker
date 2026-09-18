@@ -14,7 +14,7 @@
  * limitations under the License.
  */
 
-package listener_bulk
+package listener_batch
 
 import (
 	"encoding/json"
@@ -24,20 +24,20 @@ import (
 )
 
 func init() {
-	Factories = append(Factories, HubLogListenerFactory)
+	Factories = append(Factories, DeviceLogListenerFactory)
 }
 
-func HubLogListenerFactory(config config.Config, control Controller) (topic string, listener Listener, err error) {
-	return config.HubLogTopic, func(messages [][]byte) (err error) {
-		var logs []model.HubLog
+func DeviceLogListenerFactory(config config.Config, control Controller) (topic string, listener Listener, err error) {
+	return config.DeviceLogTopic, func(messages [][]byte) (err error) {
+		var logs []model.DeviceLog
 		for _, message := range messages {
-			var log model.HubLog
+			var log model.DeviceLog
 			err = json.Unmarshal(message, &log)
 			if err != nil {
 				return
 			}
 			logs = append(logs, log)
 		}
-		return control.LogHubs(logs)
+		return control.LogDevices(logs)
 	}, nil
 }

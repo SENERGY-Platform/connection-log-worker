@@ -65,7 +65,7 @@ func (this *Controller) LogHub(hublog model.HubLog) error {
 	return err
 }
 
-// TODO DeviceRepository bulk call
+// TODO DeviceRepository batch call
 func (this *Controller) LogHubs(logs []model.HubLog) error {
 	if this.config.Debug {
 		for _, log := range logs {
@@ -119,7 +119,7 @@ func (this *Controller) LogDevice(devicelog model.DeviceLog) error {
 	return err
 }
 
-// TODO DeviceRepository bulk call
+// TODO DeviceRepository batch call
 // TODO Notifications
 func (this *Controller) LogDevices(logs []model.DeviceLog) error {
 	if this.config.Debug {

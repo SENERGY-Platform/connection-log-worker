@@ -14,12 +14,30 @@
  * limitations under the License.
  */
 
-package listener_bulk
+package listener_batch
 
 import (
+	"encoding/json"
+
 	"github.com/SENERGY-Platform/connection-log-worker/lib/config"
+	"github.com/SENERGY-Platform/connection-log-worker/lib/model"
 )
 
-type Listener func(messages [][]byte) (err error)
+func init() {
+	Factories = append(Factories, HubLogListenerFactory)
+}
 
-var Factories []func(config config.Config, controller Controller) (topic string, listener Listener, err error)
+func HubLogListenerFactory(config config.Config, control Controller) (topic string, listener Listener, err error) {
+	return config.HubLogTopic, func(messages [][]byte) (err error) {
+		var logs []model.HubLog
+		for _, message := range messages {
+			var log model.HubLog
+			err = json.Unmarshal(message, &log)
+			if err != nil {
+				return
+			}
+			logs = append(logs, log)
+		}
+		return control.LogHubs(logs)
+	}, nil
+}

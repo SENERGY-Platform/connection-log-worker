@@ -1,4 +1,4 @@
-package listener_bulk
+package listener_batch
 
 import "github.com/SENERGY-Platform/connection-log-worker/lib/model"
 
