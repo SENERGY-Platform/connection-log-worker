@@ -140,79 +140,67 @@ func (this *Controller) LogDevices(logs []model.DeviceLog) error {
 }
 
 func handleHubLogs(states map[string]HubState, logs []model.HubLog) ([]HubState, []model.HubLog) {
-	logsMap := make(map[string][]model.HubLog)
-	for _, log := range logs {
-		tmp, ok := logsMap[log.Id]
-		if !ok {
-			state, ok := states[log.Id]
-			if ok && state.Online == log.Connected {
-				continue
-			}
-		} else if tmp[len(tmp)-1].Connected == log.Connected {
-			continue
-		}
-		logsMap[log.Id] = append(tmp, log)
-	}
-	var newStates []HubState
-	for id, lgs := range logsMap {
-		lenLogs := len(lgs)
-		currentState := lgs[lenLogs-1]
-		currentSince := currentState.Time.Unix()
-		state, ok := states[id]
-		if ok {
-			if state.Online == currentState.Connected && lenLogs == 1 {
-				delete(states, id)
-				continue
-			}
-		} else {
-			state.Gateway = id
-		}
-		state.Online = currentState.Connected
-		state.Since = currentSince
-		newStates = append(newStates, state)
-	}
-	var newLogs []model.HubLog
-	for _, state := range newStates {
-		newLogs = append(newLogs, logsMap[state.Gateway]...)
-	}
-	return newStates, newLogs
+	return handleConnectionLogs(
+		states,
+		logs,
+		func(l model.HubLog) string { return l.Id },
+		func(l model.HubLog) bool { return l.Connected },
+		func(l model.HubLog) time.Time { return l.Time },
+		func(s HubState) bool { return s.Online },
+		func(id string, online bool, since int64) HubState {
+			return HubState{Gateway: id, Online: online, Since: since}
+		},
+	)
 }
 
 func handleDeviceLogs(states map[string]DeviceState, logs []model.DeviceLog) ([]DeviceState, []model.DeviceLog) {
-	logsMap := make(map[string][]model.DeviceLog)
+	return handleConnectionLogs(
+		states,
+		logs,
+		func(l model.DeviceLog) string { return l.Id },
+		func(l model.DeviceLog) bool { return l.Connected },
+		func(l model.DeviceLog) time.Time { return l.Time },
+		func(s DeviceState) bool { return s.Online },
+		func(id string, online bool, since int64) DeviceState {
+			return DeviceState{Device: id, Online: online, Since: since}
+		},
+	)
+}
+
+func handleConnectionLogs[L any, S any](
+	states map[string]S,
+	logs []L,
+	getLogId func(L) string,
+	getLogConnection func(L) bool,
+	getLogTime func(L) time.Time,
+	getStateOnline func(S) bool,
+	newState func(id string, online bool, since int64) S,
+) ([]S, []L) {
+	logsMap := make(map[string][]L)
 	for _, log := range logs {
-		tmp, ok := logsMap[log.Id]
+		id := getLogId(log)
+		tmp, ok := logsMap[id]
 		if !ok {
-			state, ok := states[log.Id]
-			if ok && state.Online == log.Connected {
+			state, ok := states[id]
+			if ok && getStateOnline(state) == getLogConnection(log) {
 				continue
 			}
-		} else if tmp[len(tmp)-1].Connected == log.Connected {
+		} else if getLogConnection(tmp[len(tmp)-1]) == getLogConnection(log) {
 			continue
 		}
-		logsMap[log.Id] = append(tmp, log)
+		logsMap[id] = append(tmp, log)
 	}
-	var newStates []DeviceState
+	var newStates []S
+	var newLogs []L
 	for id, lgs := range logsMap {
 		lenLogs := len(lgs)
-		currentState := lgs[lenLogs-1]
-		currentSince := currentState.Time.Unix()
+		lastEntry := lgs[lenLogs-1]
 		state, ok := states[id]
-		if ok {
-			if state.Online == currentState.Connected && lenLogs == 1 {
-				delete(states, id)
-				continue
-			}
-		} else {
-			state.Device = id
+		if ok && getStateOnline(state) == getLogConnection(lastEntry) && lenLogs == 1 {
+			continue
 		}
-		state.Online = currentState.Connected
-		state.Since = currentSince
-		newStates = append(newStates, state)
-	}
-	var newLogs []model.DeviceLog
-	for _, state := range newStates {
-		newLogs = append(newLogs, logsMap[state.Device]...)
+		newStates = append(newStates, newState(id, getLogConnection(lastEntry), getLogTime(lastEntry).Unix()))
+		newLogs = append(newLogs, lgs...)
 	}
 	return newStates, newLogs
 }
