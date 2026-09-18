@@ -72,11 +72,10 @@ func (this *Controller) LogHubs(logs []model.HubLog) error {
 			this.config.GetLogger().Debug("handle hub log update", "hub-log", log)
 		}
 	}
-	ids := make(map[string]struct{})
-	for _, log := range logs {
-		ids[log.Id] = struct{}{}
-	}
-	states, err := this.getHubStates(slices.Collect(maps.Keys(ids)))
+	ids := getUniqueStrings(logs, func(i model.HubLog) string {
+		return i.Id
+	})
+	states, err := this.getHubStates(ids)
 	if err != nil {
 		return err
 	}
@@ -123,11 +122,10 @@ func (this *Controller) LogDevices(logs []model.DeviceLog) error {
 			this.config.GetLogger().Debug("handle device log update", "hub-log", log)
 		}
 	}
-	ids := make(map[string]struct{})
-	for _, log := range logs {
-		ids[log.Id] = struct{}{}
-	}
-	states, err := this.getDeviceStates(slices.Collect(maps.Keys(ids)))
+	ids := getUniqueStrings(logs, func(i model.DeviceLog) string {
+		return i.Id
+	})
+	states, err := this.getDeviceStates(ids)
 	if err != nil {
 		return err
 	}
@@ -203,4 +201,12 @@ func handleConnectionLogs[S any, L any](
 		newLogs = append(newLogs, lgs...)
 	}
 	return newStates, newLogs
+}
+
+func getUniqueStrings[T any](sl []T, valFunc func(i T) string) []string {
+	tmp := make(map[string]struct{})
+	for _, i := range sl {
+		tmp[valFunc(i)] = struct{}{}
+	}
+	return slices.Collect(maps.Keys(tmp))
 }
