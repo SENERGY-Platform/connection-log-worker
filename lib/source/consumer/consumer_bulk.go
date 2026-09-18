@@ -5,16 +5,16 @@ import (
 	"time"
 
 	"github.com/SENERGY-Platform/connection-log-worker/lib/config"
-	"github.com/SENERGY-Platform/connection-log-worker/lib/source/consumer/listener_batch"
+	"github.com/SENERGY-Platform/connection-log-worker/lib/source/consumer/listener_bulk"
 )
 
-func StartBatch(
+func StartBulk(
 	ctx context.Context,
 	config config.Config,
-	controller listener_batch.Controller,
+	controller listener_bulk.Controller,
 	runtimeErrorHandler func(err error, consumer *BatchConsumer),
 ) (err error) {
-	for _, factory := range listener_batch.Factories {
+	for _, factory := range listener_bulk.Factories {
 		topic, handler, err := factory(config, controller)
 		if err != nil {
 			config.GetLogger().Error("unable to create listener", "topic", topic, "error", err)

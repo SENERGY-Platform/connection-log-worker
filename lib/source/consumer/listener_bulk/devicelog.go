@@ -14,12 +14,30 @@
  * limitations under the License.
  */
 
-package listener_batch
+package listener_bulk
 
 import (
+	"encoding/json"
+
 	"github.com/SENERGY-Platform/connection-log-worker/lib/config"
+	"github.com/SENERGY-Platform/connection-log-worker/lib/model"
 )
 
-type Listener func(messages [][]byte) (err error)
+func init() {
+	Factories = append(Factories, DeviceLogListenerFactory)
+}
 
-var Factories []func(config config.Config, controller Controller) (topic string, listener Listener, err error)
+func DeviceLogListenerFactory(config config.Config, control Controller) (topic string, listener Listener, err error) {
+	return config.DeviceLogTopic, func(messages [][]byte) (err error) {
+		var logs []model.DeviceLog
+		for _, message := range messages {
+			var log model.DeviceLog
+			err = json.Unmarshal(message, &log)
+			if err != nil {
+				return
+			}
+			logs = append(logs, log)
+		}
+		return control.LogDevices(logs)
+	}, nil
+}
