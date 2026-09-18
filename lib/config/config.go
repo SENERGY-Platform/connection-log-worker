@@ -58,6 +58,8 @@ type Config struct {
 	KafkaMessageWindow int64
 	Debug              bool
 
+	BulkMode bool
+
 	RoundTime string
 
 	DeviceRepositoryUrl string
