@@ -80,11 +80,16 @@ func (this *Controller) LogHubs(logs []model.HubLog) error {
 		return err
 	}
 	newStates, newLogs := handleHubLogs(states, logs)
-	err = this.setHubStates(newStates)
-	if err != nil {
-		return err
+	if len(newStates) > 0 {
+		err = this.setHubStates(newStates)
+		if err != nil {
+			return err
+		}
 	}
-	return this.writeHubLogs(newLogs)
+	if len(newLogs) > 0 {
+		return this.writeHubLogs(newLogs)
+	}
+	return nil
 }
 
 func (this *Controller) LogDevice(devicelog model.DeviceLog) error {
@@ -130,11 +135,16 @@ func (this *Controller) LogDevices(logs []model.DeviceLog) error {
 		return err
 	}
 	newStates, newLogs := handleDeviceLogs(states, logs)
-	err = this.setDeviceStates(newStates)
-	if err != nil {
-		return err
+	if len(newStates) > 0 {
+		err = this.setDeviceStates(newStates)
+		if err != nil {
+			return err
+		}
 	}
-	return this.writeDeviceLogs(newLogs)
+	if len(newLogs) > 0 {
+		return this.writeDeviceLogs(newLogs)
+	}
+	return nil
 }
 
 func handleHubLogs(states map[string]HubState, logs []model.HubLog) ([]HubState, []model.HubLog) {
