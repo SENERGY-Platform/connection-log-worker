@@ -17,8 +17,11 @@
 package controller
 
 import (
-	"github.com/SENERGY-Platform/connection-log-worker/lib/model"
+	"fmt"
 	"log"
+	"strings"
+
+	"github.com/SENERGY-Platform/connection-log-worker/lib/model"
 
 	"time"
 
@@ -95,6 +98,64 @@ func (this *Controller) logGatewayHistory(gatewayLog model.HubLog) error {
 	return this.getInfluxDb().Write(bp)
 }
 
+func (this *Controller) logDeviceStates(deviceLogs []model.DeviceLog) (err error) {
+	bp, err := client.NewBatchPoints(client.BatchPointsConfig{
+		Database:  this.config.InfluxdbDb,
+		Precision: "s",
+	})
+	if err != nil {
+		return err
+	}
+	for _, deviceLog := range deviceLogs {
+		tags := map[string]string{
+			"device": deviceLog.Id,
+		}
+		fields := map[string]interface{}{
+			"connected": deviceLog.Connected,
+		}
+		pt, err := client.NewPoint(
+			"device",
+			tags,
+			fields,
+			deviceLog.Time,
+		)
+		if err != nil {
+			return err
+		}
+		bp.AddPoint(pt)
+	}
+	return this.getInfluxDb().Write(bp)
+}
+
+func (this *Controller) logHubStates(gatewayLogs []model.HubLog) (err error) {
+	bp, err := client.NewBatchPoints(client.BatchPointsConfig{
+		Database:  this.config.InfluxdbDb,
+		Precision: "s",
+	})
+	if err != nil {
+		return err
+	}
+	for _, gatewayLog := range gatewayLogs {
+		tags := map[string]string{
+			"gateway": gatewayLog.Id,
+		}
+		fields := map[string]interface{}{
+			"connected": gatewayLog.Connected,
+		}
+		pt, err := client.NewPoint(
+			"gateway",
+			tags,
+			fields,
+			gatewayLog.Time,
+		)
+		if err != nil {
+			return err
+		}
+		bp.AddPoint(pt)
+	}
+	return this.getInfluxDb().Write(bp)
+}
+
 func (this *Controller) deleteDeviceLog(deviceId string) (err error) {
 	resp, err := this.getInfluxDb().Query(client.NewQuery(`DELETE FROM device WHERE "device"='`+deviceId+`'`, this.config.InfluxdbDb, "s"))
 	if err != nil {
@@ -109,4 +170,46 @@ func (this *Controller) deleteGatewayLog(gwId string) (err error) {
 		return err
 	}
 	return resp.Error()
+}
+
+func (this *Controller) deleteDeviceLogs(deviceIds []string) (err error) {
+	if len(deviceIds) == 0 {
+		return nil
+	}
+	resp, err := this.getInfluxDb().Query(
+		client.NewQuery(
+			fmt.Sprintf("DELETE FROM device WHERE %s", tagInClause("device", deviceIds)),
+			this.config.InfluxdbDb,
+			"s",
+		),
+	)
+	if err != nil {
+		return err
+	}
+	return resp.Error()
+}
+
+func (this *Controller) deleteGatewayLogs(gwIds []string) (err error) {
+	if len(gwIds) == 0 {
+		return nil
+	}
+	resp, err := this.getInfluxDb().Query(
+		client.NewQuery(
+			fmt.Sprintf("DELETE FROM gateway WHERE %s", tagInClause("gateway", gwIds)),
+			this.config.InfluxdbDb,
+			"s",
+		),
+	)
+	if err != nil {
+		return err
+	}
+	return resp.Error()
+}
+
+func tagInClause(tag string, ids []string) string {
+	conditions := make([]string, len(ids))
+	for i, id := range ids {
+		conditions[i] = fmt.Sprintf(`"%s"='%s'`, tag, id)
+	}
+	return fmt.Sprintf("(%s)", strings.Join(conditions, " OR "))
 }
