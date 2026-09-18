@@ -116,6 +116,7 @@ func (this *Controller) LogDevice(devicelog model.DeviceLog) error {
 }
 
 // TODO DeviceRepository bulk call
+// TODO Notifications
 func (this *Controller) LogDevices(logs []model.DeviceLog) error {
 	if this.config.Debug {
 		for _, log := range logs {
