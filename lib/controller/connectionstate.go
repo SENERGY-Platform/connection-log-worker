@@ -17,9 +17,10 @@
 package controller
 
 import (
+	"time"
+
 	"github.com/SENERGY-Platform/connection-log-worker/lib/model"
 	"gopkg.in/mgo.v2/bson"
-	"time"
 )
 
 func (this *Controller) setHubState(gatewayLog model.HubLog) (update bool, err error) {
@@ -50,40 +51,52 @@ func (this *Controller) setDeviceState(deviceLog model.DeviceLog) (update bool, 
 	return
 }
 
-func (this *Controller) setHubStates(logs []model.HubLog) (err error) {
+func (this *Controller) setHubStates(states []HubState) (err error) {
 	session, collection := this.getHubStateCollection()
 	defer session.Close()
 	bulk := collection.Bulk()
-	for _, gatewayLog := range logs {
-		bulk.Upsert(bson.M{"gateway": gatewayLog.Id}, HubState{Gateway: gatewayLog.Id, Online: gatewayLog.Connected, Since: gatewayLog.Time.Unix()})
+	for _, state := range states {
+		bulk.Upsert(bson.M{"gateway": state.Gateway}, state)
 	}
 	_, err = bulk.Run()
 	return
 }
 
-func (this *Controller) setDeviceStates(logs []model.DeviceLog) (err error) {
+func (this *Controller) setDeviceStates(states []DeviceState) (err error) {
 	session, collection := this.getDeviceStateCollection()
 	defer session.Close()
 	bulk := collection.Bulk()
-	for _, deviceLog := range logs {
-		bulk.Upsert(bson.M{"device": deviceLog.Id}, DeviceState{Device: deviceLog.Id, Online: deviceLog.Connected, Since: deviceLog.Time.Unix()})
+	for _, state := range states {
+		bulk.Upsert(bson.M{"device": state.Device}, state)
 	}
 	_, err = bulk.Run()
 	return
 }
 
-func (this *Controller) getHubStates(ids []string) (result []HubState, err error) {
+func (this *Controller) getHubStates(ids []string) (map[string]HubState, error) {
 	session, collection := this.getHubStateCollection()
 	defer session.Close()
-	err = collection.Find(bson.M{"gateway": bson.M{"$in": ids}}).All(&result)
-	return
+	var result []HubState
+	err := collection.Find(bson.M{"gateway": bson.M{"$in": ids}}).All(&result)
+	if err != nil {
+		return nil, err
+	}
+	return sliceToMap(result, func(v HubState) string {
+		return v.Gateway
+	}), nil
 }
 
-func (this *Controller) getDeviceStates(ids []string) (result []DeviceState, err error) {
+func (this *Controller) getDeviceStates(ids []string) (map[string]DeviceState, error) {
 	session, collection := this.getDeviceStateCollection()
 	defer session.Close()
-	err = collection.Find(bson.M{"device": bson.M{"$in": ids}}).All(&result)
-	return
+	var result []DeviceState
+	err := collection.Find(bson.M{"device": bson.M{"$in": ids}}).All(&result)
+	if err != nil {
+		return nil, err
+	}
+	return sliceToMap(result, func(v DeviceState) string {
+		return v.Device
+	}), nil
 }
 
 func (this *Controller) deleteHubState(gwId string) (err error) {
@@ -112,4 +125,12 @@ func (this *Controller) deleteDeviceStates(ids []string) (err error) {
 	defer session.Close()
 	_, err = collection.RemoveAll(bson.M{"device": bson.M{"$in": ids}})
 	return
+}
+
+func sliceToMap[T any](sl []T, keyFunc func(v T) string) map[string]T {
+	result := make(map[string]T)
+	for _, item := range sl {
+		result[keyFunc(item)] = item
+	}
+	return result
 }
