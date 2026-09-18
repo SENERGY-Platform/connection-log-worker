@@ -17,6 +17,8 @@
 package controller
 
 import (
+	"maps"
+	"slices"
 	"sync"
 	"time"
 
@@ -63,6 +65,29 @@ func (this *Controller) LogHub(hublog model.HubLog) error {
 	return err
 }
 
+// TODO DeviceRepository bulk call
+func (this *Controller) LogHubs(logs []model.HubLog) error {
+	if this.config.Debug {
+		for _, log := range logs {
+			this.config.GetLogger().Debug("handle hub log update", "hub-log", log)
+		}
+	}
+	ids := make(map[string]struct{})
+	for _, log := range logs {
+		ids[log.Id] = struct{}{}
+	}
+	states, err := this.getHubStates(slices.Collect(maps.Keys(ids)))
+	if err != nil {
+		return err
+	}
+	newStates, newLogs := handleHubLogs(states, logs)
+	err = this.setHubStates(newStates)
+	if err != nil {
+		return err
+	}
+	return this.writeHubLogs(newLogs)
+}
+
 func (this *Controller) LogDevice(devicelog model.DeviceLog) error {
 	this.config.GetLogger().Debug("handle device log update", "device-log", devicelog)
 	if this.config.DeviceRepositoryUrl != "" && this.config.DeviceRepositoryUrl != "-" {
@@ -88,4 +113,105 @@ func (this *Controller) LogDevice(devicelog model.DeviceLog) error {
 	}
 
 	return err
+}
+
+// TODO DeviceRepository bulk call
+func (this *Controller) LogDevices(logs []model.DeviceLog) error {
+	if this.config.Debug {
+		for _, log := range logs {
+			this.config.GetLogger().Debug("handle device log update", "hub-log", log)
+		}
+	}
+	ids := make(map[string]struct{})
+	for _, log := range logs {
+		ids[log.Id] = struct{}{}
+	}
+	states, err := this.getDeviceStates(slices.Collect(maps.Keys(ids)))
+	if err != nil {
+		return err
+	}
+	newStates, newLogs := handleDeviceLogs(states, logs)
+	err = this.setDeviceStates(newStates)
+	if err != nil {
+		return err
+	}
+	return this.writeDeviceLogs(newLogs)
+}
+
+func handleHubLogs(states map[string]HubState, logs []model.HubLog) ([]HubState, []model.HubLog) {
+	logsMap := make(map[string][]model.HubLog)
+	for _, log := range logs {
+		tmp, ok := logsMap[log.Id]
+		if !ok {
+			state, ok := states[log.Id]
+			if ok && state.Online == log.Connected {
+				continue
+			}
+		} else if tmp[len(tmp)-1].Connected == log.Connected {
+			continue
+		}
+		logsMap[log.Id] = append(tmp, log)
+	}
+	var newStates []HubState
+	for id, lgs := range logsMap {
+		lenLogs := len(lgs)
+		currentState := lgs[lenLogs-1]
+		currentSince := currentState.Time.Unix()
+		state, ok := states[id]
+		if ok {
+			if state.Online == currentState.Connected && lenLogs == 1 {
+				delete(states, id)
+				continue
+			}
+		} else {
+			state.Gateway = id
+		}
+		state.Online = currentState.Connected
+		state.Since = currentSince
+		newStates = append(newStates, state)
+	}
+	var newLogs []model.HubLog
+	for _, state := range newStates {
+		newLogs = append(newLogs, logsMap[state.Gateway]...)
+	}
+	return newStates, newLogs
+}
+
+func handleDeviceLogs(states map[string]DeviceState, logs []model.DeviceLog) ([]DeviceState, []model.DeviceLog) {
+	logsMap := make(map[string][]model.DeviceLog)
+	for _, log := range logs {
+		tmp, ok := logsMap[log.Id]
+		if !ok {
+			state, ok := states[log.Id]
+			if ok && state.Online == log.Connected {
+				continue
+			}
+		} else if tmp[len(tmp)-1].Connected == log.Connected {
+			continue
+		}
+		logsMap[log.Id] = append(tmp, log)
+	}
+	var newStates []DeviceState
+	for id, lgs := range logsMap {
+		lenLogs := len(lgs)
+		currentState := lgs[lenLogs-1]
+		currentSince := currentState.Time.Unix()
+		state, ok := states[id]
+		if ok {
+			if state.Online == currentState.Connected && lenLogs == 1 {
+				delete(states, id)
+				continue
+			}
+		} else {
+			state.Device = id
+		}
+		state.Online = currentState.Connected
+		state.Since = currentSince
+		newStates = append(newStates, state)
+	}
+	var newLogs []model.DeviceLog
+	for _, state := range newStates {
+		newLogs = append(newLogs, logsMap[state.Device]...)
+	}
+	return newStates, newLogs
 }
