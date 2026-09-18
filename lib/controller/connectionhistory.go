@@ -98,7 +98,7 @@ func (this *Controller) logGatewayHistory(gatewayLog model.HubLog) error {
 	return this.getInfluxDb().Write(bp)
 }
 
-func (this *Controller) logDeviceStates(deviceLogs []model.DeviceLog) (err error) {
+func (this *Controller) writeDeviceLogs(deviceLogs []model.DeviceLog) (err error) {
 	bp, err := client.NewBatchPoints(client.BatchPointsConfig{
 		Database:  this.config.InfluxdbDb,
 		Precision: "s",
@@ -127,7 +127,7 @@ func (this *Controller) logDeviceStates(deviceLogs []model.DeviceLog) (err error
 	return this.getInfluxDb().Write(bp)
 }
 
-func (this *Controller) logHubStates(gatewayLogs []model.HubLog) (err error) {
+func (this *Controller) writeHubLogs(gatewayLogs []model.HubLog) (err error) {
 	bp, err := client.NewBatchPoints(client.BatchPointsConfig{
 		Database:  this.config.InfluxdbDb,
 		Precision: "s",
