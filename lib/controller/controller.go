@@ -167,7 +167,7 @@ func handleDeviceLogs(states map[string]DeviceState, logs []model.DeviceLog) ([]
 	)
 }
 
-func handleConnectionLogs[L any, S any](
+func handleConnectionLogs[S any, L any](
 	states map[string]S,
 	logs []L,
 	getLogId func(L) string,
