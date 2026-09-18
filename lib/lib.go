@@ -18,6 +18,7 @@ package lib
 
 import (
 	"context"
+
 	"github.com/SENERGY-Platform/connection-log-worker/lib/config"
 	"github.com/SENERGY-Platform/connection-log-worker/lib/controller"
 	"github.com/SENERGY-Platform/connection-log-worker/lib/source/consumer"
@@ -25,4 +26,12 @@ import (
 
 func Start(ctx context.Context, config config.Config, runtimeErrorHandler func(err error, consumer *consumer.Consumer)) error {
 	return consumer.Start(ctx, config, controller.New(config), runtimeErrorHandler)
+}
+
+func StartBulk(
+	ctx context.Context,
+	config config.Config,
+	runtimeErrorHandler func(err error, consumer *consumer.BatchConsumer),
+) error {
+	return consumer.StartBulk(ctx, config, controller.New(config), runtimeErrorHandler)
 }

@@ -43,9 +43,15 @@ func main() {
 	}
 
 	ctx := context.Background() //no desire to cancel or stop running program; for tests you can use context.WithCancel(context.Background())
-	err = lib.Start(ctx, conf, func(err error, consumer *consumer.Consumer) {
-		log.Fatal("FATAL ERROR:", err)
-	})
+	if conf.BulkMode {
+		err = lib.StartBulk(ctx, conf, func(err error, consumer *consumer.BatchConsumer) {
+			log.Fatal("FATAL ERROR:", err)
+		})
+	} else {
+		err = lib.Start(ctx, conf, func(err error, consumer *consumer.Consumer) {
+			log.Fatal("FATAL ERROR:", err)
+		})
+	}
 	if err != nil {
 		log.Fatal("FATAL error:", err)
 	}
