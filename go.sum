@@ -14,8 +14,8 @@ github.com/SENERGY-Platform/api-docs-provider/lib/models v0.0.3 h1:bQVD6bTN2EKup
 github.com/SENERGY-Platform/api-docs-provider/lib/models v0.0.3/go.mod h1:tTT3GhSD1Zue/L+HmHbr9YH+gPKLQVcYcnrbwrPcPFg=
 github.com/SENERGY-Platform/developer-notifications v0.0.6 h1:sUr3n5YTs3zTYKSEi4N3iXonWYiDP+Ll6yn6z1FxMRY=
 github.com/SENERGY-Platform/developer-notifications v0.0.6/go.mod h1:DwfWoj00UUN4v9fCi60frXbFycFUIIvXeKzmABcgHK8=
-github.com/SENERGY-Platform/device-repository/v2 v2.2.2-0.20260921121800-d00cc1964ac5 h1:ymaQ6BpE+2dUZNDWpDC9yXdrbNS39gKUtuDwAb89RJo=
-github.com/SENERGY-Platform/device-repository/v2 v2.2.2-0.20260921121800-d00cc1964ac5/go.mod h1:ZQ5L+wjWtof8XsZxbMX/3hk0yVqpjXg+i+w46jr/zWk=
+github.com/SENERGY-Platform/device-repository/v2 v2.2.2 h1:Amuki9bjVOGH5aYvNd4srCI9BcQN+nNB8f/MMP5dP9Q=
+github.com/SENERGY-Platform/device-repository/v2 v2.2.2/go.mod h1:ZQ5L+wjWtof8XsZxbMX/3hk0yVqpjXg+i+w46jr/zWk=
 github.com/SENERGY-Platform/gin-middleware v0.14.1 h1:o2le7do9++e377ixtnFXbobAJP5CSMQXW7d1dUSAwFU=
 github.com/SENERGY-Platform/gin-middleware v0.14.1/go.mod h1:+9dhC08w9tpnjnFC8gYO0+0Po5TKfeUGt+5a1jUVfqI=
 github.com/SENERGY-Platform/go-base-http-client v0.1.0 h1:PUiZVEj7/cMSZJ0g5G611tjY9bSh1Eby+tcktrgpiZ0=

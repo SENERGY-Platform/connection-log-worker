@@ -4,7 +4,7 @@ go 1.26
 
 require (
 	github.com/SENERGY-Platform/api-docs-provider/lib/client v0.0.3
-	github.com/SENERGY-Platform/device-repository/v2 v2.2.2-0.20260921121800-d00cc1964ac5
+	github.com/SENERGY-Platform/device-repository/v2 v2.2.2
 	github.com/SENERGY-Platform/go-service-base/struct-logger v0.8.0
 	github.com/SENERGY-Platform/models/go v0.0.0-20260910124809-95949e15e3d4
 	github.com/google/uuid v1.6.0
