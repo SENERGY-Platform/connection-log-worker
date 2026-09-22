@@ -24,7 +24,7 @@ import (
 
 	"github.com/SENERGY-Platform/connection-log-worker/lib/config"
 	"github.com/SENERGY-Platform/connection-log-worker/lib/model"
-	devicerepo "github.com/SENERGY-Platform/device-repository/lib/client"
+	devicerepo "github.com/SENERGY-Platform/device-repository/v2/lib/client"
 	"github.com/influxdata/influxdb/client/v2"
 	"gopkg.in/mgo.v2"
 )
@@ -65,7 +65,6 @@ func (this *Controller) LogHub(hublog model.HubLog) error {
 	return err
 }
 
-// TODO DeviceRepository batch call
 func (this *Controller) LogHubs(logs []model.HubLog) error {
 	if this.config.Debug {
 		for _, log := range logs {
@@ -81,6 +80,16 @@ func (this *Controller) LogHubs(logs []model.HubLog) error {
 	}
 	newStates, newLogs := handleHubLogs(states, logs)
 	if len(newStates) > 0 {
+		if this.config.DeviceRepositoryUrl != "" && this.config.DeviceRepositoryUrl != "-" {
+			statesMap := make(map[string]bool)
+			for _, state := range newStates {
+				statesMap[state.Gateway] = state.Online
+			}
+			err, _ = this.deviceRepo.SetHubConnectionStates(devicerepo.InternalAdminToken, statesMap)
+			if err != nil {
+				return err
+			}
+		}
 		err = this.setHubStates(newStates)
 		if err != nil {
 			return err
@@ -119,7 +128,6 @@ func (this *Controller) LogDevice(devicelog model.DeviceLog) error {
 	return err
 }
 
-// TODO DeviceRepository batch call
 // TODO Notifications
 func (this *Controller) LogDevices(logs []model.DeviceLog) error {
 	if this.config.Debug {
@@ -136,6 +144,16 @@ func (this *Controller) LogDevices(logs []model.DeviceLog) error {
 	}
 	newStates, newLogs := handleDeviceLogs(states, logs)
 	if len(newStates) > 0 {
+		if this.config.DeviceRepositoryUrl != "" && this.config.DeviceRepositoryUrl != "-" {
+			statesMap := make(map[string]bool)
+			for _, state := range newStates {
+				statesMap[state.Device] = state.Online
+			}
+			err, _ = this.deviceRepo.SetDeviceConnectionStates(devicerepo.InternalAdminToken, statesMap)
+			if err != nil {
+				return err
+			}
+		}
 		err = this.setDeviceStates(newStates)
 		if err != nil {
 			return err
