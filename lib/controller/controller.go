@@ -131,7 +131,7 @@ func (this *Controller) LogDevice(devicelog model.DeviceLog) error {
 func (this *Controller) LogDevices(logs []model.DeviceLog) error {
 	if this.config.Debug {
 		for _, log := range logs {
-			this.config.GetLogger().Debug("handle device log update", "hub-log", log)
+			this.config.GetLogger().Debug("handle device log update", "device-log", log)
 		}
 	}
 	ids := getUniqueStrings(logs, func(i model.DeviceLog) string {
