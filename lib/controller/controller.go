@@ -128,7 +128,6 @@ func (this *Controller) LogDevice(devicelog model.DeviceLog) error {
 	return err
 }
 
-// TODO Notifications
 func (this *Controller) LogDevices(logs []model.DeviceLog) error {
 	if this.config.Debug {
 		for _, log := range logs {
@@ -160,7 +159,17 @@ func (this *Controller) LogDevices(logs []model.DeviceLog) error {
 		}
 	}
 	if len(newLogs) > 0 {
-		return this.writeDeviceLogs(newLogs)
+		err = this.writeDeviceLogs(newLogs)
+		if err != nil {
+			return err
+		}
+		for _, log := range newLogs {
+			if time.Since(log.Time) < time.Hour {
+				this.handleNotifications(log)
+			} else {
+				this.config.GetLogger().Debug("devicelog older than an hour -> ignore for handleNotifications")
+			}
+		}
 	}
 	return nil
 }
