@@ -19,6 +19,10 @@
   "InfluxdbTimeout": 3,
 
   "KafkaUrl": "kafka:9092",
+  "KafkaMaxMessages": 500,
+  "KafkaMessageWindow": 10,
+
+  "BatchMode": true,
 
   "Debug": true,
   "RoundTime": "1m",
