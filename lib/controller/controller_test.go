@@ -25,9 +25,10 @@ import (
 	"github.com/SENERGY-Platform/connection-log-worker/lib/model"
 )
 
-// sortHubLogs and sortHubStates order slices deterministically so comparisons
-// don't depend on map iteration order (handleHubLogs builds both by ranging
-// over a map).
+// sortHubLogs orders logs deterministically so slice comparisons don't depend
+// on map iteration order (handleHubLogs builds both return slices by ranging
+// over a map). Used for both the "new states" and "new logs" return values,
+// since handleHubLogs now returns []model.HubLog for both.
 func sortHubLogs(logs []model.HubLog) {
 	sort.Slice(logs, func(i, j int) bool {
 		if logs[i].Id != logs[j].Id {
@@ -37,24 +38,12 @@ func sortHubLogs(logs []model.HubLog) {
 	})
 }
 
-func sortHubStates(states []HubState) {
-	sort.Slice(states, func(i, j int) bool {
-		return states[i].Gateway < states[j].Gateway
-	})
-}
-
 func sortDeviceLogs(logs []model.DeviceLog) {
 	sort.Slice(logs, func(i, j int) bool {
 		if logs[i].Id != logs[j].Id {
 			return logs[i].Id < logs[j].Id
 		}
 		return logs[i].Time.Before(logs[j].Time)
-	})
-}
-
-func sortDeviceStates(states []DeviceState) {
-	sort.Slice(states, func(i, j int) bool {
-		return states[i].Device < states[j].Device
 	})
 }
 
@@ -77,8 +66,8 @@ func TestHandleHubLogs(t *testing.T) {
 			{Id: "hubNew", Connected: true, Time: t1},
 		}
 		newStates, newLogs := handleHubLogs(states, logs)
-		expectedStates := []HubState{
-			{Gateway: "hubNew", Online: true, Since: t1.Unix()},
+		expectedStates := []model.HubLog{
+			{Id: "hubNew", Connected: true, Time: t1},
 		}
 		expectedLogs := []model.HubLog{
 			{Id: "hubNew", Connected: true, Time: t1},
@@ -126,8 +115,8 @@ func TestHandleHubLogs(t *testing.T) {
 			{Id: "hub1", Connected: false, Time: t2},
 		}
 		newStates, newLogs := handleHubLogs(states, logs)
-		expectedStates := []HubState{
-			{Gateway: "hub1", Online: false, Since: t2.Unix()},
+		expectedStates := []model.HubLog{
+			{Id: "hub1", Connected: false, Time: t2},
 		}
 		expectedLogs := []model.HubLog{
 			{Id: "hub1", Connected: false, Time: t2},
@@ -150,8 +139,10 @@ func TestHandleHubLogs(t *testing.T) {
 			{Id: "hub1", Connected: true, Time: t3},  // real transition back
 		}
 		newStates, newLogs := handleHubLogs(states, logs)
-		expectedStates := []HubState{
-			{Gateway: "hub1", Online: true, Since: t3.Unix()},
+		// newStates only ever carries the last surviving log per id (the current state);
+		// newLogs carries every surviving log (the full history to write).
+		expectedStates := []model.HubLog{
+			{Id: "hub1", Connected: true, Time: t3},
 		}
 		expectedLogs := []model.HubLog{
 			{Id: "hub1", Connected: false, Time: t2},
@@ -176,16 +167,16 @@ func TestHandleHubLogs(t *testing.T) {
 			{Id: "hub3", Connected: false, Time: t2}, // brand new -> added
 		}
 		newStates, newLogs := handleHubLogs(states, logs)
-		expectedStates := []HubState{
-			{Gateway: "hub2", Online: true, Since: t2.Unix()},
-			{Gateway: "hub3", Online: false, Since: t2.Unix()},
+		expectedStates := []model.HubLog{
+			{Id: "hub2", Connected: true, Time: t2},
+			{Id: "hub3", Connected: false, Time: t2},
 		}
 		expectedLogs := []model.HubLog{
 			{Id: "hub2", Connected: true, Time: t2},
 			{Id: "hub3", Connected: false, Time: t2},
 		}
-		sortHubStates(newStates)
-		sortHubStates(expectedStates)
+		sortHubLogs(newStates)
+		sortHubLogs(expectedStates)
 		sortHubLogs(newLogs)
 		sortHubLogs(expectedLogs)
 		if !reflect.DeepEqual(expectedStates, newStates) {
@@ -226,8 +217,8 @@ func TestHandleDeviceLogs(t *testing.T) {
 			{Id: "deviceNew", Connected: true, Time: t1},
 		}
 		newStates, newLogs := handleDeviceLogs(states, logs)
-		expectedStates := []DeviceState{
-			{Device: "deviceNew", Online: true, Since: t1.Unix()},
+		expectedStates := []model.DeviceLog{
+			{Id: "deviceNew", Connected: true, Time: t1},
 		}
 		expectedLogs := []model.DeviceLog{
 			{Id: "deviceNew", Connected: true, Time: t1},
@@ -275,8 +266,8 @@ func TestHandleDeviceLogs(t *testing.T) {
 			{Id: "device1", Connected: false, Time: t2},
 		}
 		newStates, newLogs := handleDeviceLogs(states, logs)
-		expectedStates := []DeviceState{
-			{Device: "device1", Online: false, Since: t2.Unix()},
+		expectedStates := []model.DeviceLog{
+			{Id: "device1", Connected: false, Time: t2},
 		}
 		expectedLogs := []model.DeviceLog{
 			{Id: "device1", Connected: false, Time: t2},
@@ -299,8 +290,8 @@ func TestHandleDeviceLogs(t *testing.T) {
 			{Id: "device1", Connected: true, Time: t3},  // real transition back
 		}
 		newStates, newLogs := handleDeviceLogs(states, logs)
-		expectedStates := []DeviceState{
-			{Device: "device1", Online: true, Since: t3.Unix()},
+		expectedStates := []model.DeviceLog{
+			{Id: "device1", Connected: true, Time: t3},
 		}
 		expectedLogs := []model.DeviceLog{
 			{Id: "device1", Connected: false, Time: t2},
@@ -325,16 +316,16 @@ func TestHandleDeviceLogs(t *testing.T) {
 			{Id: "device3", Connected: false, Time: t2}, // brand new -> added
 		}
 		newStates, newLogs := handleDeviceLogs(states, logs)
-		expectedStates := []DeviceState{
-			{Device: "device2", Online: true, Since: t2.Unix()},
-			{Device: "device3", Online: false, Since: t2.Unix()},
+		expectedStates := []model.DeviceLog{
+			{Id: "device2", Connected: true, Time: t2},
+			{Id: "device3", Connected: false, Time: t2},
 		}
 		expectedLogs := []model.DeviceLog{
 			{Id: "device2", Connected: true, Time: t2},
 			{Id: "device3", Connected: false, Time: t2},
 		}
-		sortDeviceStates(newStates)
-		sortDeviceStates(expectedStates)
+		sortDeviceLogs(newStates)
+		sortDeviceLogs(expectedStates)
 		sortDeviceLogs(newLogs)
 		sortDeviceLogs(expectedLogs)
 		if !reflect.DeepEqual(expectedStates, newStates) {
