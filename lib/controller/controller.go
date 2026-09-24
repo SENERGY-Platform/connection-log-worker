@@ -202,6 +202,78 @@ func handleDeviceLogs(states map[string]DeviceState, logs []model.DeviceLog) ([]
 	)
 }
 
+// handleConnectionLogs reduces a batch of connection logs (hub or device) against the
+// currently stored state per id, and returns only the states that actually changed
+// together with the log entries that caused those changes.
+//
+// It works in two steps:
+//
+//  1. Grouping and duplicate filtering. Logs are grouped by id, in the order they
+//     appear in the input slice (the slice is assumed to already be chronological).
+//     Within each id's group, a log is dropped if it doesn't represent a change:
+//     - the first log seen for an id is dropped if that id already has stored
+//     state (states[id]) whose Online value equals the log's Connected value -
+//     i.e. it's a duplicate report of what's already known, not a new event.
+//     - every later log for that id is dropped if it reports the same Connected
+//     value as the last log that was kept for that id - i.e. repeated
+//     "still connected"/"still disconnected" heartbeats collapse into the log
+//     that started that run.
+//     What survives is one log per real transition, in order, for each id.
+//
+//  2. Deciding what to persist. For each id that has at least one surviving log,
+//     the last one is used to build a new state (Online = its Connected value,
+//     Since = its Time). If that id already had stored state AND its group has
+//     exactly one surviving log AND that log's Connected value matches the stored
+//     Online value, the id is skipped entirely - no real change happened, the
+//     single surviving log was only kept because it was the first one seen in the
+//     batch, not because anything changed. Every other id is included in the
+//     result, along with all of its surviving logs (not just the last one), so a
+//     transition-and-back within one batch still gets its intermediate points
+//     written to history.
+//
+// Examples (stored state per id shown as "online since <Since>"; logs shown as
+// "<Connected>@<Time>" in batch order):
+//
+//   - Brand new id, no stored state:
+//     stored: (none)        logs: [true@t1]
+//     -> kept: state{Online:true, Since:t1}, logs:[true@t1]
+//
+//   - Single duplicate log, value matches the stored state:
+//     stored: true since t0  logs: [true@t1]
+//     -> dropped entirely, id absent from both results
+//
+//   - Every log in the batch duplicates the stored state:
+//     stored: true since t0  logs: [true@t1, true@t2]
+//     -> dropped entirely, same as the single-duplicate case
+//
+//   - Real single transition:
+//     stored: true since t0  logs: [false@t1]
+//     -> kept: state{Online:false, Since:t1}, logs:[false@t1]
+//
+//   - Leading duplicate followed by real transitions within the batch:
+//     stored: true since t0  logs: [true@t1, false@t2, true@t3]
+//     -> true@t1 is dropped as a duplicate of the stored state; false@t2 and
+//     true@t3 are each kept because they differ from the previously kept log
+//     -> kept: state{Online:true, Since:t3}, logs:[false@t2, true@t3]
+//
+//   - Transitions back to the original value within the batch - not a no-op,
+//     because a real transition happened in between:
+//     stored: true since t0  logs: [false@t1, true@t2]
+//     -> kept: state{Online:true, Since:t2}, logs:[false@t1, true@t2]
+//     (this differs from the single-duplicate case only in having more than one
+//     surviving log - that's what marks it as a real change worth persisting,
+//     even though Online ends up equal to what was already stored)
+//
+//   - Multiple ids in one batch, handled independently:
+//     stored: {id1: true since t0, id2: false since t0}
+//     logs:   [id1 true@t1, id2 true@t2, id3 false@t2]
+//     -> id1's log duplicates its stored state -> dropped
+//     -> id2 changed -> kept: state{Online:true, Since:t2}, logs:[true@t2]
+//     -> id3 is new -> kept: state{Online:false, Since:t2}, logs:[false@t2]
+//
+//   - An id present in states but absent from logs is ignored: the algorithm
+//     only ever looks at ids that appear in the input logs, so it's neither
+//     read nor touched.
 func handleConnectionLogs[S any, L any](
 	states map[string]S,
 	logs []L,
