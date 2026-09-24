@@ -108,6 +108,16 @@ func (this *Controller) removeDeviceOfflineNotificationInfos(deviceid string) er
 	return nil
 }
 
+func (this *Controller) removeDeviceOfflineNotificationInfosBatch(deviceIds []string) error {
+	session, collection := this.getDeviceOfflineNotificationInfoCollection()
+	defer session.Close()
+	_, err := collection.RemoveAll(bson.M{"device_id": bson.M{"$in": deviceIds}})
+	if err != nil {
+		return err
+	}
+	return nil
+}
+
 func (this *Controller) getDeviceOfflineNotificationInfos(deviceid string) (info DeviceOfflineNotificationInfo, found bool, err error) {
 	session, collection := this.getDeviceOfflineNotificationInfoCollection()
 	defer session.Close()
@@ -122,6 +132,19 @@ func (this *Controller) getDeviceOfflineNotificationInfos(deviceid string) (info
 	return list[0], true, nil
 }
 
+func (this *Controller) getDeviceOfflineNotificationInfosBatch(deviceIds []string) (map[string]DeviceOfflineNotificationInfo, error) {
+	session, collection := this.getDeviceOfflineNotificationInfoCollection()
+	defer session.Close()
+	var result []DeviceOfflineNotificationInfo
+	err := collection.Find(bson.M{"device_id": bson.M{"$in": deviceIds}}).All(&result)
+	if err != nil {
+		return nil, err
+	}
+	return sliceToMap(result, func(v DeviceOfflineNotificationInfo) string {
+		return v.DeviceId
+	}), nil
+}
+
 func (this *Controller) setDeviceOfflineNotificationInfos(info DeviceOfflineNotificationInfo) error {
 	session, collection := this.getDeviceOfflineNotificationInfoCollection()
 	defer session.Close()
@@ -130,6 +153,17 @@ func (this *Controller) setDeviceOfflineNotificationInfos(info DeviceOfflineNoti
 		return err
 	}
 	return nil
+}
+
+func (this *Controller) setDeviceOfflineNotificationInfosBatch(infos []DeviceOfflineNotificationInfo) error {
+	session, collection := this.getDeviceOfflineNotificationInfoCollection()
+	defer session.Close()
+	bulk := collection.Bulk()
+	for _, info := range infos {
+		bulk.Upsert(bson.M{"device_id": info.DeviceId}, info)
+	}
+	_, err := bulk.Run()
+	return err
 }
 
 type Notification struct {
