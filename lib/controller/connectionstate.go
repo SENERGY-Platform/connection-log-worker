@@ -51,23 +51,31 @@ func (this *Controller) setDeviceState(deviceLog model.DeviceLog) (update bool, 
 	return
 }
 
-func (this *Controller) setHubStates(states []HubState) (err error) {
+func (this *Controller) setHubStates(hubLogs []model.HubLog) (err error) {
 	session, collection := this.getHubStateCollection()
 	defer session.Close()
 	bulk := collection.Bulk()
-	for _, state := range states {
-		bulk.Upsert(bson.M{"gateway": state.Gateway}, state)
+	for _, hubLog := range hubLogs {
+		bulk.Upsert(bson.M{"gateway": hubLog.Id}, HubState{
+			Gateway: hubLog.Id,
+			Online:  hubLog.Connected,
+			Since:   hubLog.Time.Unix(),
+		})
 	}
 	_, err = bulk.Run()
 	return
 }
 
-func (this *Controller) setDeviceStates(states []DeviceState) (err error) {
+func (this *Controller) setDeviceStates(deviceLogs []model.DeviceLog) (err error) {
 	session, collection := this.getDeviceStateCollection()
 	defer session.Close()
 	bulk := collection.Bulk()
-	for _, state := range states {
-		bulk.Upsert(bson.M{"device": state.Device}, state)
+	for _, log := range deviceLogs {
+		bulk.Upsert(bson.M{"device": log.Id}, DeviceState{
+			Device: log.Id,
+			Online: log.Connected,
+			Since:  log.Time.Unix(),
+		})
 	}
 	_, err = bulk.Run()
 	return

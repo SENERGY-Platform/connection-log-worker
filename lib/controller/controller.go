@@ -83,7 +83,7 @@ func (this *Controller) LogHubs(logs []model.HubLog) error {
 		if this.config.DeviceRepositoryUrl != "" && this.config.DeviceRepositoryUrl != "-" {
 			statesMap := make(map[string]bool)
 			for _, state := range newStates {
-				statesMap[state.Gateway] = state.Online
+				statesMap[state.Id] = state.Connected
 			}
 			err, _ = this.deviceRepo.SetHubConnectionStates(devicerepo.InternalAdminToken, statesMap)
 			if err != nil {
@@ -146,7 +146,7 @@ func (this *Controller) LogDevices(logs []model.DeviceLog) error {
 		if this.config.DeviceRepositoryUrl != "" && this.config.DeviceRepositoryUrl != "-" {
 			statesMap := make(map[string]bool)
 			for _, state := range newStates {
-				statesMap[state.Device] = state.Online
+				statesMap[state.Id] = state.Connected
 			}
 			err, _ = this.deviceRepo.SetDeviceConnectionStates(devicerepo.InternalAdminToken, statesMap)
 			if err != nil {
@@ -174,31 +174,23 @@ func (this *Controller) LogDevices(logs []model.DeviceLog) error {
 	return nil
 }
 
-func handleHubLogs(states map[string]HubState, logs []model.HubLog) ([]HubState, []model.HubLog) {
+func handleHubLogs(states map[string]HubState, logs []model.HubLog) ([]model.HubLog, []model.HubLog) {
 	return handleConnectionLogs(
 		states,
 		logs,
 		func(l model.HubLog) string { return l.Id },
 		func(l model.HubLog) bool { return l.Connected },
-		func(l model.HubLog) time.Time { return l.Time },
 		func(s HubState) bool { return s.Online },
-		func(id string, online bool, since int64) HubState {
-			return HubState{Gateway: id, Online: online, Since: since}
-		},
 	)
 }
 
-func handleDeviceLogs(states map[string]DeviceState, logs []model.DeviceLog) ([]DeviceState, []model.DeviceLog) {
+func handleDeviceLogs(states map[string]DeviceState, logs []model.DeviceLog) ([]model.DeviceLog, []model.DeviceLog) {
 	return handleConnectionLogs(
 		states,
 		logs,
 		func(l model.DeviceLog) string { return l.Id },
 		func(l model.DeviceLog) bool { return l.Connected },
-		func(l model.DeviceLog) time.Time { return l.Time },
 		func(s DeviceState) bool { return s.Online },
-		func(id string, online bool, since int64) DeviceState {
-			return DeviceState{Device: id, Online: online, Since: since}
-		},
 	)
 }
 
@@ -279,10 +271,8 @@ func handleConnectionLogs[S any, L any](
 	logs []L,
 	getLogId func(L) string,
 	getLogConnection func(L) bool,
-	getLogTime func(L) time.Time,
 	getStateOnline func(S) bool,
-	newState func(id string, online bool, since int64) S,
-) ([]S, []L) {
+) ([]L, []L) {
 	logsMap := make(map[string][]L)
 	for _, log := range logs {
 		id := getLogId(log)
@@ -297,7 +287,7 @@ func handleConnectionLogs[S any, L any](
 		}
 		logsMap[id] = append(tmp, log)
 	}
-	var newStates []S
+	var newStates []L
 	var newLogs []L
 	for id, lgs := range logsMap {
 		lenLogs := len(lgs)
@@ -306,7 +296,7 @@ func handleConnectionLogs[S any, L any](
 		if ok && getStateOnline(state) == getLogConnection(lastEntry) && lenLogs == 1 {
 			continue
 		}
-		newStates = append(newStates, newState(id, getLogConnection(lastEntry), getLogTime(lastEntry).Unix()))
+		newStates = append(newStates, lastEntry)
 		newLogs = append(newLogs, lgs...)
 	}
 	return newStates, newLogs
