@@ -164,9 +164,7 @@ func (this *Controller) LogDevices(logs []model.DeviceLog) error {
 			return err
 		}
 	}
-	if len(newStates) > 0 {
-		this.handleNotificationsBatch(newStates)
-	}
+	this.handleNotificationsBatch(logs)
 	return nil
 }
 

@@ -83,70 +83,37 @@ func (this *Controller) handleNotifications(devicelog model.DeviceLog) {
 	}
 }
 
-func (this *Controller) handleNotificationsBatch(deviceStates []model.DeviceLog) {
-	var connected []string
-	var disconnected []model.DeviceLog
-	for _, deviceState := range deviceStates {
-		if deviceState.Connected {
-			connected = append(connected, deviceState.Id)
-		} else {
-			disconnected = append(disconnected, deviceState)
-		}
-	}
-	if len(connected) > 0 {
-		err := this.removeDeviceOfflineNotificationInfosBatch(connected)
-		if err != nil {
-			this.config.GetLogger().Error(
-				"unable to remove offline notification infos",
-				"device-ids", strings.Join(connected, ","),
-				"error", err,
-			)
-			return
-		}
-	}
-	if len(disconnected) == 0 {
+// handleNotificationsBatch mirrors handleNotifications, but for a whole batch of raw
+// device logs at once. It operates on the raw logs straight from LogDevices - not on
+// handleDeviceLogs' deduplicated result, which only ever carries the final state per id -
+// so a device that stays offline across many batches keeps getting re-evaluated on every
+// "still offline" report, exactly like the single-message path does.
+//
+// The decision logic itself is pure (groupDeviceLogsForNotifications and
+// computeOfflineNotificationChanges below) so it can be unit tested without a live
+// Mongo/HTTP dependency; this method only wires that decision to the actual reads,
+// writes and outgoing notifications.
+func (this *Controller) handleNotificationsBatch(deviceLogs []model.DeviceLog) {
+	now := time.Now()
+	groups, orderedIds := groupDeviceLogsForNotifications(deviceLogs, now)
+	if len(orderedIds) == 0 {
 		return
 	}
-	disconnectedIds := getUniqueStrings(disconnected, func(i model.DeviceLog) string {
-		return i.Id
-	})
-	infos, err := this.getDeviceOfflineNotificationInfosBatch(disconnectedIds)
+
+	infos, err := this.getDeviceOfflineNotificationInfosBatch(orderedIds)
 	if err != nil {
-		this.config.GetLogger().Error(
-			"unable to get offline notification infos",
-			"device-ids", strings.Join(disconnectedIds, ","),
-			"error", err,
-		)
+		this.config.GetLogger().Error("unable to get offline notification infos", "device-ids", strings.Join(orderedIds, ","), "error", err)
 		return
 	}
-	var newInfos []DeviceOfflineNotificationInfo
-	var changedInfos []DeviceOfflineNotificationInfo
-	notifications := make(map[string][][3]string)
-	parseErrors := make(map[string][][3]string)
-	for _, deviceState := range disconnected {
-		info, ok := infos[deviceState.Id]
-		if !ok {
-			info = DeviceOfflineNotificationInfo{
-				DeviceId:     deviceState.Id,
-				OfflineSince: deviceState.Time.Unix(),
-			}
-			newInfos = append(newInfos, info)
-			infos[deviceState.Id] = info
-		}
-		if info.Notified == true || deviceState.MonitorConnectionState == "" || deviceState.DeviceOwner == "" {
-			continue
-		}
-		maxDur, err := time.ParseDuration(deviceState.MonitorConnectionState)
+
+	removeIds, newInfos, changedInfos, notifications, parseErrors :=
+		computeOfflineNotificationChanges(infos, groups, orderedIds, now, this.roundTime)
+
+	if len(removeIds) > 0 {
+		err = this.removeDeviceOfflineNotificationInfosBatch(removeIds)
 		if err != nil {
-			parseErrors[deviceState.DeviceOwner] = append(parseErrors[deviceState.DeviceOwner], [3]string{deviceState.Id, deviceState.DeviceName, err.Error()})
-			this.config.GetLogger().Error("unable to parse MonitorConnectionState as duration", "device-id", deviceState.Id, "error", err)
-			continue
-		}
-		since := time.Since(time.Unix(info.OfflineSince, 0))
-		if since > maxDur {
-			notifications[deviceState.DeviceOwner] = append(notifications[deviceState.DeviceOwner], [3]string{deviceState.Id, deviceState.DeviceName, since.Round(this.roundTime).String()})
-			info.Notified = true
-			changedInfos = append(changedInfos, info)
+			this.config.GetLogger().Error("unable to remove offline notification infos", "device-ids", strings.Join(removeIds, ","), "error", err)
+			return
 		}
 	}
 	if len(newInfos) > 0 {
@@ -163,6 +130,9 @@ func (this *Controller) handleNotificationsBatch(deviceStates []model.DeviceLog)
 		}
 	}
 	for owner, errs := range parseErrors {
+		for _, deviceErr := range errs {
+			this.config.GetLogger().Error("unable to parse MonitorConnectionState as duration", "device-id", deviceErr[0], "error", deviceErr[2])
+		}
 		this.sendMonitorParseErrorNotificationBatch(owner, errs)
 	}
 	for owner, batch := range notifications {
@@ -187,6 +157,103 @@ func (this *Controller) handleNotificationsBatch(deviceStates []model.DeviceLog)
 			return
 		}
 	}
+}
+
+// groupDeviceLogsForNotifications drops logs older than an hour (mirroring LogDevice's
+// per-log recency check) and groups the rest by device id, preserving order, collapsing
+// consecutive logs that report the same Connected value. orderedIds lists the ids in the
+// order their first surviving log appeared, so callers can look up stored info in one
+// batched, deterministic call.
+func groupDeviceLogsForNotifications(logs []model.DeviceLog, now time.Time) (groups map[string][]model.DeviceLog, orderedIds []string) {
+	groups = make(map[string][]model.DeviceLog)
+	for _, l := range logs {
+		if now.Sub(l.Time) >= time.Hour {
+			continue
+		}
+		group, ok := groups[l.Id]
+		if ok && group[len(group)-1].Connected == l.Connected {
+			continue
+		}
+		if !ok {
+			orderedIds = append(orderedIds, l.Id)
+		}
+		groups[l.Id] = append(group, l)
+	}
+	return groups, orderedIds
+}
+
+// computeOfflineNotificationChanges replays each id's (already grouped, chronological)
+// logs against its currently stored DeviceOfflineNotificationInfo, if any, and decides
+// what needs to change. It never sends anything or touches storage itself.
+//
+// For each id, a local "tracked" flag starts out reflecting whatever infos[id] says
+// (found or not), and is then updated log by log:
+//   - a connected log clears tracking: if something was tracked, its id is added to
+//     removeIds and tracked becomes false. A device that was never tracked is a no-op.
+//   - a disconnected log, when nothing is tracked, starts a new tracked period: a new
+//     DeviceOfflineNotificationInfo{OfflineSince: this log's Time} is added to newInfos,
+//     and nothing else happens for that log - in particular it is never immediately
+//     checked against the duration threshold, since it just started.
+//   - a disconnected log, when something is already tracked, is checked: if it was
+//     already Notified, or has no MonitorConnectionState/DeviceOwner, nothing happens.
+//     If MonitorConnectionState fails to parse as a duration, the error is recorded
+//     under parseErrors[DeviceOwner] and nothing further happens for that log. Otherwise,
+//     if now minus the tracked OfflineSince exceeds that duration, the device is recorded
+//     under notifications[DeviceOwner], the tracked info is marked Notified and added to
+//     changedInfos.
+//
+// Because a connected log always clears tracking first, a device that reconnects and
+// disconnects again within the same batch starts a genuinely new (un-Notified) tracked
+// period - any stale, already-Notified info from before is cleared, not reused. And
+// because a device already marked Notified is skipped before the duration check ever
+// runs again, an ongoing offline period is never notified twice, no matter how many
+// batches - or how many logs within one batch - it spans.
+func computeOfflineNotificationChanges(
+	infos map[string]DeviceOfflineNotificationInfo,
+	groups map[string][]model.DeviceLog,
+	orderedIds []string,
+	now time.Time,
+	roundTime time.Duration,
+) (removeIds []string, newInfos []DeviceOfflineNotificationInfo, changedInfos []DeviceOfflineNotificationInfo, notifications map[string][][3]string, parseErrors map[string][][3]string) {
+	notifications = make(map[string][][3]string)
+	parseErrors = make(map[string][][3]string)
+
+	for _, id := range orderedIds {
+		info, tracked := infos[id]
+		for _, l := range groups[id] {
+			if l.Connected {
+				if tracked {
+					removeIds = append(removeIds, id)
+					tracked = false
+				}
+				continue
+			}
+			if !tracked {
+				info = DeviceOfflineNotificationInfo{
+					DeviceId:     id,
+					OfflineSince: l.Time.Unix(),
+				}
+				newInfos = append(newInfos, info)
+				tracked = true
+				continue
+			}
+			if info.Notified || l.MonitorConnectionState == "" || l.DeviceOwner == "" {
+				continue
+			}
+			maxDur, err := time.ParseDuration(l.MonitorConnectionState)
+			if err != nil {
+				parseErrors[l.DeviceOwner] = append(parseErrors[l.DeviceOwner], [3]string{l.Id, l.DeviceName, err.Error()})
+				continue
+			}
+			since := now.Sub(time.Unix(info.OfflineSince, 0))
+			if since > maxDur {
+				notifications[l.DeviceOwner] = append(notifications[l.DeviceOwner], [3]string{l.Id, l.DeviceName, since.Round(roundTime).String()})
+				info.Notified = true
+				changedInfos = append(changedInfos, info)
+			}
+		}
+	}
+	return removeIds, newInfos, changedInfos, notifications, parseErrors
 }
 
 func (this *Controller) getDeviceOfflineNotificationInfoCollection() (session *mgo.Session, collection *mgo.Collection) {
