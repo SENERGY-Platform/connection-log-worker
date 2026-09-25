@@ -17,6 +17,7 @@
 package controller
 
 import (
+	"context"
 	"maps"
 	"slices"
 	"sync"
@@ -26,25 +27,30 @@ import (
 	"github.com/SENERGY-Platform/connection-log-worker/lib/model"
 	devicerepo "github.com/SENERGY-Platform/device-repository/v2/lib/client"
 	"github.com/influxdata/influxdb/client/v2"
-	"gopkg.in/mgo.v2"
+	"go.mongodb.org/mongo-driver/mongo"
 )
 
 type Controller struct {
 	config           config.Config
-	mongoDbInstance  *mgo.Session
-	mongoDbOnce      sync.Once
+	mongo            *mongo.Client
 	influxdbInstance client.Client
 	influxdbOnce     sync.Once
 	roundTime        time.Duration
 	deviceRepo       devicerepo.Interface
 }
 
-func New(config config.Config) *Controller {
+// New connects to MongoDB and fails when the authenticated startup check or the index creation fails;
+// the client is disconnected when ctx is done.
+func New(ctx context.Context, config config.Config) (*Controller, error) {
 	roundTime, err := time.ParseDuration(config.RoundTime)
 	if err != nil {
 		roundTime = time.Minute
 	}
-	return &Controller{config: config, roundTime: roundTime, deviceRepo: devicerepo.NewClient(config.DeviceRepositoryUrl, nil)}
+	mongoClient, err := newMongoClient(ctx, config)
+	if err != nil {
+		return nil, err
+	}
+	return &Controller{config: config, mongo: mongoClient, roundTime: roundTime, deviceRepo: devicerepo.NewClient(config.DeviceRepositoryUrl, nil)}, nil
 }
 
 func (this *Controller) LogHub(hublog model.HubLog) error {

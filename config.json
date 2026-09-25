@@ -1,6 +1,9 @@
 {
-  "MongoUrl": "mongodb://mongo",
-  "MongoTable": "connectionlog",
+  "MongoUrl": "mongodb://localhost:27017",
+  "MongoUser": "",
+  "MongoPassword": "",
+  "MongoAuthSource": "admin",
+  "MongoDatabase": "connection_log",
   "DeviceStateCollection": "devicestate",
   "HubStateCollection": "gatewaystate",
   "DeviceOfflineNotificationInfoCollection": "device_offline_notification_info",

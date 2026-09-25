@@ -22,14 +22,14 @@ import (
 	"encoding/json"
 	"fmt"
 	"io"
-	"log"
 	"net/http"
 	"strings"
 	"time"
 
 	"github.com/SENERGY-Platform/connection-log-worker/lib/model"
-	"gopkg.in/mgo.v2"
-	"gopkg.in/mgo.v2/bson"
+	"go.mongodb.org/mongo-driver/bson"
+	"go.mongodb.org/mongo-driver/mongo"
+	"go.mongodb.org/mongo-driver/mongo/options"
 )
 
 func (this *Controller) handleNotifications(devicelog model.DeviceLog) {
@@ -256,26 +256,20 @@ func computeOfflineNotificationChanges(
 	return removeIds, newInfos, changedInfos, notifications, parseErrors
 }
 
-func (this *Controller) getDeviceOfflineNotificationInfoCollection() (session *mgo.Session, collection *mgo.Collection) {
-	session = this.getMongoDb()
-	collection = session.DB(this.config.MongoTable).C(this.config.DeviceOfflineNotificationInfoCollection)
-	err := collection.EnsureIndexKey("device_id")
-	if err != nil {
-		log.Fatal("error on getDeviceCollection device index: ", err)
-	}
-	return
+func (this *Controller) getDeviceOfflineNotificationInfoCollection() *mongo.Collection {
+	return this.mongo.Database(this.config.MongoDatabase).Collection(this.config.DeviceOfflineNotificationInfoCollection)
 }
 
 type DeviceOfflineNotificationInfo struct {
 	DeviceId     string `json:"device_id" bson:"device_id"`
-	OfflineSince int64  `json:"offline_since" bson:"offline_since"`
+	OfflineSince int64  `json:"offline_since" bson:"offline_since,truncate"`
 	Notified     bool   `json:"notified" bson:"notified"`
 }
 
 func (this *Controller) removeDeviceOfflineNotificationInfos(deviceid string) error {
-	session, collection := this.getDeviceOfflineNotificationInfoCollection()
-	defer session.Close()
-	_, err := collection.RemoveAll(bson.M{"device_id": deviceid})
+	ctx, cancel := mongoOperationContext()
+	defer cancel()
+	_, err := this.getDeviceOfflineNotificationInfoCollection().DeleteMany(ctx, bson.M{"device_id": deviceid})
 	if err != nil {
 		return err
 	}
@@ -283,9 +277,9 @@ func (this *Controller) removeDeviceOfflineNotificationInfos(deviceid string) er
 }
 
 func (this *Controller) removeDeviceOfflineNotificationInfosBatch(deviceIds []string) error {
-	session, collection := this.getDeviceOfflineNotificationInfoCollection()
-	defer session.Close()
-	_, err := collection.RemoveAll(bson.M{"device_id": bson.M{"$in": deviceIds}})
+	ctx, cancel := mongoOperationContext()
+	defer cancel()
+	_, err := this.getDeviceOfflineNotificationInfoCollection().DeleteMany(ctx, inFilter("device_id", deviceIds))
 	if err != nil {
 		return err
 	}
@@ -293,10 +287,13 @@ func (this *Controller) removeDeviceOfflineNotificationInfosBatch(deviceIds []st
 }
 
 func (this *Controller) getDeviceOfflineNotificationInfos(deviceid string) (info DeviceOfflineNotificationInfo, found bool, err error) {
-	session, collection := this.getDeviceOfflineNotificationInfoCollection()
-	defer session.Close()
-	list := []DeviceOfflineNotificationInfo{}
-	err = collection.Find(bson.M{"device_id": deviceid}).Limit(1).All(&list)
+	ctx, cancel := mongoOperationContext()
+	defer cancel()
+	cursor, err := this.getDeviceOfflineNotificationInfoCollection().Find(ctx, bson.M{"device_id": deviceid}, options.Find().SetLimit(1))
+	if err != nil {
+		return info, false, err
+	}
+	list, err := decodeAll[DeviceOfflineNotificationInfo](ctx, cursor, this.config.GetLogger())
 	if err != nil {
 		return info, false, err
 	}
@@ -307,10 +304,13 @@ func (this *Controller) getDeviceOfflineNotificationInfos(deviceid string) (info
 }
 
 func (this *Controller) getDeviceOfflineNotificationInfosBatch(deviceIds []string) (map[string]DeviceOfflineNotificationInfo, error) {
-	session, collection := this.getDeviceOfflineNotificationInfoCollection()
-	defer session.Close()
-	var result []DeviceOfflineNotificationInfo
-	err := collection.Find(bson.M{"device_id": bson.M{"$in": deviceIds}}).All(&result)
+	ctx, cancel := mongoOperationContext()
+	defer cancel()
+	cursor, err := this.getDeviceOfflineNotificationInfoCollection().Find(ctx, inFilter("device_id", deviceIds))
+	if err != nil {
+		return nil, err
+	}
+	result, err := decodeAll[DeviceOfflineNotificationInfo](ctx, cursor, this.config.GetLogger())
 	if err != nil {
 		return nil, err
 	}
@@ -320,9 +320,9 @@ func (this *Controller) getDeviceOfflineNotificationInfosBatch(deviceIds []strin
 }
 
 func (this *Controller) setDeviceOfflineNotificationInfos(info DeviceOfflineNotificationInfo) error {
-	session, collection := this.getDeviceOfflineNotificationInfoCollection()
-	defer session.Close()
-	_, err := collection.Upsert(bson.M{"device_id": info.DeviceId}, info)
+	ctx, cancel := mongoOperationContext()
+	defer cancel()
+	_, err := this.getDeviceOfflineNotificationInfoCollection().ReplaceOne(ctx, bson.M{"device_id": info.DeviceId}, info, options.Replace().SetUpsert(true))
 	if err != nil {
 		return err
 	}
@@ -330,14 +330,11 @@ func (this *Controller) setDeviceOfflineNotificationInfos(info DeviceOfflineNoti
 }
 
 func (this *Controller) setDeviceOfflineNotificationInfosBatch(infos []DeviceOfflineNotificationInfo) error {
-	session, collection := this.getDeviceOfflineNotificationInfoCollection()
-	defer session.Close()
-	bulk := collection.Bulk()
+	var models []mongo.WriteModel
 	for _, info := range infos {
-		bulk.Upsert(bson.M{"device_id": info.DeviceId}, info)
+		models = append(models, upsertModel(bson.M{"device_id": info.DeviceId}, info))
 	}
-	_, err := bulk.Run()
-	return err
+	return bulkWrite(this.getDeviceOfflineNotificationInfoCollection(), models)
 }
 
 type Notification struct {

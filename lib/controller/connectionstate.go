@@ -20,72 +20,73 @@ import (
 	"time"
 
 	"github.com/SENERGY-Platform/connection-log-worker/lib/model"
-	"gopkg.in/mgo.v2/bson"
+	"go.mongodb.org/mongo-driver/bson"
+	"go.mongodb.org/mongo-driver/mongo"
+	"go.mongodb.org/mongo-driver/mongo/options"
 )
 
 func (this *Controller) setHubState(gatewayLog model.HubLog) (update bool, err error) {
-	session, collection := this.getHubStateCollection()
-	defer session.Close()
-	count, err := collection.Find(bson.M{"gateway": gatewayLog.Id, "online": gatewayLog.Connected}).Limit(1).Count()
+	collection := this.getHubStateCollection()
+	ctx, cancel := mongoOperationContext()
+	defer cancel()
+	count, err := collection.CountDocuments(ctx, bson.M{"gateway": gatewayLog.Id, "online": gatewayLog.Connected}, options.Count().SetLimit(1))
 	if err != nil {
 		return false, err
 	}
 	update = count == 0
 	if update {
-		_, err = collection.Upsert(bson.M{"gateway": gatewayLog.Id}, HubState{Gateway: gatewayLog.Id, Online: gatewayLog.Connected, Since: time.Now().Unix()})
+		_, err = collection.ReplaceOne(ctx, bson.M{"gateway": gatewayLog.Id}, HubState{Gateway: gatewayLog.Id, Online: gatewayLog.Connected, Since: time.Now().Unix()}, options.Replace().SetUpsert(true))
 	}
 	return
 }
 
 func (this *Controller) setDeviceState(deviceLog model.DeviceLog) (update bool, err error) {
-	session, collection := this.getDeviceStateCollection()
-	defer session.Close()
-	count, err := collection.Find(bson.M{"device": deviceLog.Id, "online": deviceLog.Connected}).Limit(1).Count()
+	collection := this.getDeviceStateCollection()
+	ctx, cancel := mongoOperationContext()
+	defer cancel()
+	count, err := collection.CountDocuments(ctx, bson.M{"device": deviceLog.Id, "online": deviceLog.Connected}, options.Count().SetLimit(1))
 	if err != nil {
 		return false, err
 	}
 	update = count == 0
 	if update {
-		_, err = collection.Upsert(bson.M{"device": deviceLog.Id}, DeviceState{Device: deviceLog.Id, Online: deviceLog.Connected, Since: time.Now().Unix()})
+		_, err = collection.ReplaceOne(ctx, bson.M{"device": deviceLog.Id}, DeviceState{Device: deviceLog.Id, Online: deviceLog.Connected, Since: time.Now().Unix()}, options.Replace().SetUpsert(true))
 	}
 	return
 }
 
 func (this *Controller) setHubStates(hubLogs []model.HubLog) (err error) {
-	session, collection := this.getHubStateCollection()
-	defer session.Close()
-	bulk := collection.Bulk()
+	var models []mongo.WriteModel
 	for _, hubLog := range hubLogs {
-		bulk.Upsert(bson.M{"gateway": hubLog.Id}, HubState{
+		models = append(models, upsertModel(bson.M{"gateway": hubLog.Id}, HubState{
 			Gateway: hubLog.Id,
 			Online:  hubLog.Connected,
 			Since:   hubLog.Time.Unix(),
-		})
+		}))
 	}
-	_, err = bulk.Run()
-	return
+	return bulkWrite(this.getHubStateCollection(), models)
 }
 
 func (this *Controller) setDeviceStates(deviceLogs []model.DeviceLog) (err error) {
-	session, collection := this.getDeviceStateCollection()
-	defer session.Close()
-	bulk := collection.Bulk()
+	var models []mongo.WriteModel
 	for _, log := range deviceLogs {
-		bulk.Upsert(bson.M{"device": log.Id}, DeviceState{
+		models = append(models, upsertModel(bson.M{"device": log.Id}, DeviceState{
 			Device: log.Id,
 			Online: log.Connected,
 			Since:  log.Time.Unix(),
-		})
+		}))
 	}
-	_, err = bulk.Run()
-	return
+	return bulkWrite(this.getDeviceStateCollection(), models)
 }
 
 func (this *Controller) getHubStates(ids []string) (map[string]HubState, error) {
-	session, collection := this.getHubStateCollection()
-	defer session.Close()
-	var result []HubState
-	err := collection.Find(bson.M{"gateway": bson.M{"$in": ids}}).All(&result)
+	ctx, cancel := mongoOperationContext()
+	defer cancel()
+	cursor, err := this.getHubStateCollection().Find(ctx, inFilter("gateway", ids))
+	if err != nil {
+		return nil, err
+	}
+	result, err := decodeAll[HubState](ctx, cursor, this.config.GetLogger())
 	if err != nil {
 		return nil, err
 	}
@@ -95,10 +96,13 @@ func (this *Controller) getHubStates(ids []string) (map[string]HubState, error) 
 }
 
 func (this *Controller) getDeviceStates(ids []string) (map[string]DeviceState, error) {
-	session, collection := this.getDeviceStateCollection()
-	defer session.Close()
-	var result []DeviceState
-	err := collection.Find(bson.M{"device": bson.M{"$in": ids}}).All(&result)
+	ctx, cancel := mongoOperationContext()
+	defer cancel()
+	cursor, err := this.getDeviceStateCollection().Find(ctx, inFilter("device", ids))
+	if err != nil {
+		return nil, err
+	}
+	result, err := decodeAll[DeviceState](ctx, cursor, this.config.GetLogger())
 	if err != nil {
 		return nil, err
 	}
@@ -108,30 +112,30 @@ func (this *Controller) getDeviceStates(ids []string) (map[string]DeviceState, e
 }
 
 func (this *Controller) deleteHubState(gwId string) (err error) {
-	session, collection := this.getHubStateCollection()
-	defer session.Close()
-	_, err = collection.RemoveAll(bson.M{"gateway": gwId})
+	ctx, cancel := mongoOperationContext()
+	defer cancel()
+	_, err = this.getHubStateCollection().DeleteMany(ctx, bson.M{"gateway": gwId})
 	return
 }
 
 func (this *Controller) deleteDeviceState(deviceId string) (err error) {
-	session, collection := this.getDeviceStateCollection()
-	defer session.Close()
-	_, err = collection.RemoveAll(bson.M{"device": deviceId})
+	ctx, cancel := mongoOperationContext()
+	defer cancel()
+	_, err = this.getDeviceStateCollection().DeleteMany(ctx, bson.M{"device": deviceId})
 	return
 }
 
 func (this *Controller) deleteHubStates(ids []string) (err error) {
-	session, collection := this.getHubStateCollection()
-	defer session.Close()
-	_, err = collection.RemoveAll(bson.M{"gateway": bson.M{"$in": ids}})
+	ctx, cancel := mongoOperationContext()
+	defer cancel()
+	_, err = this.getHubStateCollection().DeleteMany(ctx, inFilter("gateway", ids))
 	return
 }
 
 func (this *Controller) deleteDeviceStates(ids []string) (err error) {
-	session, collection := this.getDeviceStateCollection()
-	defer session.Close()
-	_, err = collection.RemoveAll(bson.M{"device": bson.M{"$in": ids}})
+	ctx, cancel := mongoOperationContext()
+	defer cancel()
+	_, err = this.getDeviceStateCollection().DeleteMany(ctx, inFilter("device", ids))
 	return
 }
 
