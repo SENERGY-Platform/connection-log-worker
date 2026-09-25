@@ -163,13 +163,9 @@ func (this *Controller) LogDevices(logs []model.DeviceLog) error {
 		if err != nil {
 			return err
 		}
-		for _, log := range newLogs {
-			if time.Since(log.Time) < time.Hour {
-				this.handleNotifications(log)
-			} else {
-				this.config.GetLogger().Debug("devicelog older than an hour -> ignore for handleNotifications")
-			}
-		}
+	}
+	if len(newStates) > 0 {
+		this.handleNotificationsBatch(newStates)
 	}
 	return nil
 }

@@ -82,6 +82,10 @@ func (this *Controller) handleNotifications(devicelog model.DeviceLog) {
 	}
 }
 
+func (this *Controller) handleNotificationsBatch(deviceLogs []model.DeviceLog) {
+
+}
+
 func (this *Controller) getDeviceOfflineNotificationInfoCollection() (session *mgo.Session, collection *mgo.Collection) {
 	session = this.getMongoDb()
 	collection = session.DB(this.config.MongoTable).C(this.config.DeviceOfflineNotificationInfoCollection)
