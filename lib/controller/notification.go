@@ -24,6 +24,7 @@ import (
 	"io"
 	"log"
 	"net/http"
+	"strings"
 	"time"
 
 	"github.com/SENERGY-Platform/connection-log-worker/lib/model"
@@ -82,8 +83,110 @@ func (this *Controller) handleNotifications(devicelog model.DeviceLog) {
 	}
 }
 
-func (this *Controller) handleNotificationsBatch(deviceLogs []model.DeviceLog) {
-
+func (this *Controller) handleNotificationsBatch(deviceStates []model.DeviceLog) {
+	var connected []string
+	var disconnected []model.DeviceLog
+	for _, deviceState := range deviceStates {
+		if deviceState.Connected {
+			connected = append(connected, deviceState.Id)
+		} else {
+			disconnected = append(disconnected, deviceState)
+		}
+	}
+	if len(connected) > 0 {
+		err := this.removeDeviceOfflineNotificationInfosBatch(connected)
+		if err != nil {
+			this.config.GetLogger().Error(
+				"unable to remove offline notification infos",
+				"device-ids", strings.Join(connected, ","),
+				"error", err,
+			)
+			return
+		}
+	}
+	if len(disconnected) == 0 {
+		return
+	}
+	disconnectedIds := getUniqueStrings(disconnected, func(i model.DeviceLog) string {
+		return i.Id
+	})
+	infos, err := this.getDeviceOfflineNotificationInfosBatch(disconnectedIds)
+	if err != nil {
+		this.config.GetLogger().Error(
+			"unable to get offline notification infos",
+			"device-ids", strings.Join(disconnectedIds, ","),
+			"error", err,
+		)
+		return
+	}
+	var newInfos []DeviceOfflineNotificationInfo
+	var changedInfos []DeviceOfflineNotificationInfo
+	notifications := make(map[string][][3]string)
+	parseErrors := make(map[string][][3]string)
+	for _, deviceState := range disconnected {
+		info, ok := infos[deviceState.Id]
+		if !ok {
+			info = DeviceOfflineNotificationInfo{
+				DeviceId:     deviceState.Id,
+				OfflineSince: deviceState.Time.Unix(),
+			}
+			newInfos = append(newInfos, info)
+			infos[deviceState.Id] = info
+		}
+		if info.Notified == true || deviceState.MonitorConnectionState == "" || deviceState.DeviceOwner == "" {
+			continue
+		}
+		maxDur, err := time.ParseDuration(deviceState.MonitorConnectionState)
+		if err != nil {
+			parseErrors[deviceState.DeviceOwner] = append(parseErrors[deviceState.DeviceOwner], [3]string{deviceState.Id, deviceState.DeviceName, err.Error()})
+			this.config.GetLogger().Error("unable to parse MonitorConnectionState as duration", "device-id", deviceState.Id, "error", err)
+			continue
+		}
+		since := time.Since(time.Unix(info.OfflineSince, 0))
+		if since > maxDur {
+			notifications[deviceState.DeviceOwner] = append(notifications[deviceState.DeviceOwner], [3]string{deviceState.Id, deviceState.DeviceName, since.Round(this.roundTime).String()})
+			info.Notified = true
+			changedInfos = append(changedInfos, info)
+		}
+	}
+	if len(newInfos) > 0 {
+		err = this.setDeviceOfflineNotificationInfosBatch(newInfos)
+		if err != nil {
+			this.config.GetLogger().Error(
+				"unable to set offline notification infos",
+				"device-ids", strings.Join(getUniqueStrings(newInfos, func(i DeviceOfflineNotificationInfo) string {
+					return i.DeviceId
+				}), ","),
+				"error", err,
+			)
+			return
+		}
+	}
+	for owner, errs := range parseErrors {
+		this.sendMonitorParseErrorNotificationBatch(owner, errs)
+	}
+	for owner, batch := range notifications {
+		err = this.sendOfflineNotificationBatch(owner, batch)
+		if err != nil {
+			this.config.GetLogger().Error("unable to send notification", "device-ids", getUniqueStrings(batch, func(i [3]string) string {
+				return i[0]
+			}), "error", err)
+			return
+		}
+	}
+	if len(changedInfos) > 0 {
+		err = this.setDeviceOfflineNotificationInfosBatch(changedInfos)
+		if err != nil {
+			this.config.GetLogger().Error(
+				"unable to update info with notified flag",
+				"device-ids", strings.Join(getUniqueStrings(changedInfos, func(i DeviceOfflineNotificationInfo) string {
+					return i.DeviceId
+				}), ","),
+				"error", err,
+			)
+			return
+		}
+	}
 }
 
 func (this *Controller) getDeviceOfflineNotificationInfoCollection() (session *mgo.Session, collection *mgo.Collection) {
@@ -208,6 +311,47 @@ func (this *Controller) sendOfflineNotification(devicelog model.DeviceLog, since
 	return nil
 }
 
+func (this *Controller) sendOfflineNotificationBatch(owner string, batch [][3]string) error {
+	this.config.GetLogger().Debug("send offline notification", "device-ids", getUniqueStrings(batch, func(i [3]string) string {
+		return i[0]
+	}))
+	b := new(bytes.Buffer)
+	err := json.NewEncoder(b).Encode(Notification{
+		UserId: owner,
+		Title:  "Devices Offline",
+		Message: fmt.Sprintf(
+			"offline devices:\n%s",
+			strings.Join(func() []string {
+				var tmp []string
+				for _, item := range batch {
+					tmp = append(tmp, fmt.Sprintf("id=%s name=%s since=%s", item[0], item[1], item[2]))
+				}
+				return tmp
+			}(), "\n")),
+		Topic: "device_offline",
+	})
+	if err != nil {
+		return err
+	}
+	endpoint := this.config.NotificationUrl + "/notifications"
+	req, err := http.NewRequest("POST", endpoint, b)
+	if err != nil {
+		return err
+	}
+	ctx, _ := context.WithTimeout(context.Background(), 5*time.Second)
+	req.WithContext(ctx)
+	req.Header.Set("Content-Type", "application/json")
+	resp, err := http.DefaultClient.Do(req)
+	if err != nil {
+		return err
+	}
+	if resp.StatusCode >= 300 {
+		respMsg, _ := io.ReadAll(resp.Body)
+		return fmt.Errorf("unexpected response status from notifier %v %v", resp.Status, string(respMsg))
+	}
+	return nil
+}
+
 func (this *Controller) sendMonitorParseErrorNotification(devicelog model.DeviceLog, err error) {
 	this.config.GetLogger().Debug("send parse error notification", "device-log", fmt.Sprintf("%#v", devicelog))
 	b := new(bytes.Buffer)
@@ -216,6 +360,50 @@ func (this *Controller) sendMonitorParseErrorNotification(devicelog model.Device
 		Title:   "Device monitor_connection_state Attribute Invalid",
 		Message: fmt.Sprintf("device %v (%v) has an invalid monitor_connection_state attribute (allowed time-shorthands are s,m,h); error = %v", devicelog.DeviceName, devicelog.Id, err.Error()),
 		Topic:   "device_offline",
+	})
+	if err != nil {
+		this.config.GetLogger().Error("unable to encode notification", "error", err)
+		return
+	}
+	endpoint := this.config.NotificationUrl + "/notifications?ignore_duplicates_within_seconds=86400"
+	req, err := http.NewRequest("POST", endpoint, b)
+	if err != nil {
+		this.config.GetLogger().Error("unable to create notification request", "error", err)
+		return
+	}
+	ctx, _ := context.WithTimeout(context.Background(), 5*time.Second)
+	req.WithContext(ctx)
+	req.Header.Set("Content-Type", "application/json")
+	resp, err := http.DefaultClient.Do(req)
+	if err != nil {
+		this.config.GetLogger().Error("unable to send notification", "error", err)
+		return
+	}
+	if resp.StatusCode >= 300 {
+		respMsg, _ := io.ReadAll(resp.Body)
+		this.config.GetLogger().Error("unexpected response status from notifier", "status-code", resp.StatusCode, "error", string(respMsg))
+	}
+	return
+}
+
+func (this *Controller) sendMonitorParseErrorNotificationBatch(owner string, deviceErrs [][3]string) {
+	this.config.GetLogger().Debug("send parse error notifications", "device-ids", getUniqueStrings(deviceErrs, func(i [3]string) string {
+		return i[0]
+	}))
+	b := new(bytes.Buffer)
+	err := json.NewEncoder(b).Encode(Notification{
+		UserId: owner,
+		Title:  "Device monitor_connection_state Attributes Invalid",
+		Message: fmt.Sprintf(
+			"invalid monitor_connection_state attributes (allowed time-shorthands are s,m,h):\n%s",
+			strings.Join(func() []string {
+				var tmp []string
+				for _, item := range deviceErrs {
+					tmp = append(tmp, fmt.Sprintf("id=%s name=%s error=%s", item[0], item[1], item[2]))
+				}
+				return tmp
+			}(), "\n")),
+		Topic: "device_offline",
 	})
 	if err != nil {
 		this.config.GetLogger().Error("unable to encode notification", "error", err)
