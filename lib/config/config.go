@@ -34,7 +34,10 @@ import (
 
 type Config struct {
 	MongoUrl                                string `config:"secret"`
-	MongoTable                              string
+	MongoUser                               string
+	MongoPassword                           string `config:"secret"`
+	MongoAuthSource                         string
+	MongoDatabase                           string
 	DeviceStateCollection                   string
 	HubStateCollection                      string
 	DeviceOfflineNotificationInfoCollection string
@@ -79,6 +82,11 @@ func Load(location string) (config Config, err error) {
 		log.Println("error on config load: ", error)
 		return config, error
 	}
+	config = Config{
+		MongoUrl:        "mongodb://localhost:27017",
+		MongoAuthSource: "admin",
+		MongoDatabase:   "connection_log",
+	}
 	decoder := json.NewDecoder(file)
 	error = decoder.Decode(&config)
 	if error != nil {
@@ -88,6 +96,36 @@ func Load(location string) (config Config, err error) {
 	handleEnvironmentVars(&config)
 	config.GetLogger()
 	return config, nil
+}
+
+func isSecret(field reflect.StructField) bool {
+	return strings.Contains(field.Tag.Get("config"), "secret")
+}
+
+// plainConfig has none of Config's methods, so formatting it does not recurse.
+type plainConfig Config
+
+// masked returns a copy in which every non-empty field tagged config:"secret" is replaced.
+func (this Config) masked() plainConfig {
+	v := reflect.ValueOf(&this).Elem()
+	for i := 0; i < v.NumField(); i++ {
+		if isSecret(v.Type().Field(i)) && v.Field(i).Kind() == reflect.String && v.Field(i).String() != "" {
+			v.Field(i).SetString("***")
+		}
+	}
+	return plainConfig(this)
+}
+
+func (this Config) MarshalJSON() ([]byte, error) {
+	return json.Marshal(this.masked())
+}
+
+func (this Config) String() string {
+	return fmt.Sprintf("%+v", this.masked())
+}
+
+func (this Config) GoString() string {
+	return fmt.Sprintf("%#v", this.masked())
 }
 
 var camel = regexp.MustCompile("(^[^A-Z]*|[A-Z]*)([A-Z][^A-Z]+|$)")
@@ -111,11 +149,10 @@ func handleEnvironmentVars(config *Config) {
 	configType := configValue.Type()
 	for index := 0; index < configType.NumField(); index++ {
 		fieldName := configType.Field(index).Name
-		fieldConfig := configType.Field(index).Tag.Get("config")
 		envName := fieldNameToEnvName(fieldName)
 		envValue := os.Getenv(envName)
 		if envValue != "" {
-			if !strings.Contains(fieldConfig, "secret") {
+			if !isSecret(configType.Field(index)) {
 				fmt.Println("use environment variable: ", envName, " = ", envValue)
 			}
 			if configValue.FieldByName(fieldName).Kind() == reflect.Int64 {

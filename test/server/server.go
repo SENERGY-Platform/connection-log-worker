@@ -41,7 +41,7 @@ func New(ctx context.Context, wg *sync.WaitGroup, defaults config.Config) (confi
 	}
 	permissionsV2Url := "http://" + permV2Ip + ":8080"
 
-	_, connectionlogip, err = Connectionlog(ctx, wg, config.MongoUrl, config.InfluxdbUrl, permissionsV2Url)
+	_, connectionlogip, err = Connectionlog(ctx, wg, config.MongoUrl, config.MongoDatabase, config.InfluxdbUrl, permissionsV2Url)
 	if err != nil {
 		log.Println("ERROR:", err)
 		debug.PrintStack()

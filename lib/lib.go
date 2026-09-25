@@ -25,7 +25,11 @@ import (
 )
 
 func Start(ctx context.Context, config config.Config, runtimeErrorHandler func(err error, consumer *consumer.Consumer)) error {
-	return consumer.Start(ctx, config, controller.New(config), runtimeErrorHandler)
+	control, err := controller.New(ctx, config)
+	if err != nil {
+		return err
+	}
+	return consumer.Start(ctx, config, control, runtimeErrorHandler)
 }
 
 func StartBatch(
@@ -33,5 +37,9 @@ func StartBatch(
 	config config.Config,
 	runtimeErrorHandler func(err error, consumer *consumer.BatchConsumer),
 ) error {
-	return consumer.StartBulk(ctx, config, controller.New(config), runtimeErrorHandler)
+	control, err := controller.New(ctx, config)
+	if err != nil {
+		return err
+	}
+	return consumer.StartBulk(ctx, config, control, runtimeErrorHandler)
 }

@@ -28,7 +28,9 @@ import (
 	"github.com/testcontainers/testcontainers-go/wait"
 )
 
-func Connectionlog(ctx context.Context, wg *sync.WaitGroup, mongourl string, influxurl string, permV2Url string) (hostport string, containerip string, err error) {
+// Connectionlog reads the states the worker writes, so it gets the worker's database under both its current
+// setting name (MONGO_TABLE) and the contract name (MONGO_DATABASE).
+func Connectionlog(ctx context.Context, wg *sync.WaitGroup, mongourl string, mongoDatabase string, influxurl string, permV2Url string) (hostport string, containerip string, err error) {
 	log.Println("start connectionlog")
 	c, err := testcontainers.GenericContainer(ctx, testcontainers.GenericContainerRequest{
 		ContainerRequest: testcontainers.ContainerRequest{
@@ -39,6 +41,8 @@ func Connectionlog(ctx context.Context, wg *sync.WaitGroup, mongourl string, inf
 			),
 			Env: map[string]string{
 				"MONGO_URL":          mongourl,
+				"MONGO_TABLE":        mongoDatabase,
+				"MONGO_DATABASE":     mongoDatabase,
 				"INFLUXDB_URL":       influxurl,
 				"INFLUXDB_TIMEOUT":   "3",
 				"INFLUXDB_USER":      "user",
