@@ -26,7 +26,11 @@ func (this *Controller) UpdateHub(command model.HubCommand) error {
 		if err != nil {
 			return err
 		}
-		return this.deleteHubState(command.Id)
+		err = this.deleteHubState(command.Id)
+		if err != nil {
+			return err
+		}
+		return this.removeHubOfflineNotificationInfos([]string{command.Id})
 	}
 	return nil
 }
@@ -45,5 +49,9 @@ func (this *Controller) UpdateHubs(commands []model.HubCommand) error {
 	if err != nil {
 		return err
 	}
-	return this.deleteHubStates(ids)
+	err = this.deleteHubStates(ids)
+	if err != nil {
+		return err
+	}
+	return this.removeHubOfflineNotificationInfos(ids)
 }

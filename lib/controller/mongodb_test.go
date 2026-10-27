@@ -46,6 +46,7 @@ func testMongoConfig() config.Config {
 		DeviceStateCollection:                   "devicestate",
 		HubStateCollection:                      "gatewaystate",
 		DeviceOfflineNotificationInfoCollection: "device_offline_notification_info",
+		HubOfflineNotificationInfoCollection:    "hub_offline_notification_info",
 		RoundTime:                               "1m",
 	}
 }

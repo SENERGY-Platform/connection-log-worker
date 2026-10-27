@@ -121,6 +121,7 @@ func ensureMongoIndexes(ctx context.Context, client *mongo.Client, conf config.C
 		{conf.DeviceStateCollection, "device"},
 		{conf.HubStateCollection, "gateway"},
 		{conf.DeviceOfflineNotificationInfoCollection, "device_id"},
+		{conf.HubOfflineNotificationInfoCollection, "hub_id"},
 	} {
 		_, err := db.Collection(index.collection).Indexes().CreateOne(ctx, mongo.IndexModel{Keys: bson.D{{Key: index.key, Value: 1}}})
 		if err != nil {

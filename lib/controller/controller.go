@@ -37,6 +37,9 @@ type Controller struct {
 	influxdbOnce     sync.Once
 	roundTime        time.Duration
 	deviceRepo       devicerepo.Interface
+
+	hubOfflineEnabled bool
+	hubOfflineDelay   time.Duration
 }
 
 // New connects to MongoDB and fails when the authenticated startup check or the index creation fails;
@@ -46,11 +49,31 @@ func New(ctx context.Context, config config.Config) (*Controller, error) {
 	if err != nil {
 		roundTime = time.Minute
 	}
+	hubOfflineEnabled, hubOfflineDelay, hubOfflineInterval, err := parseHubOfflineNotificationConfig(config)
+	if err != nil {
+		return nil, err
+	}
+	if hubOfflineEnabled && (config.DeviceRepositoryUrl == "" || config.DeviceRepositoryUrl == "-") {
+		// the device-repository provides owner and name of the hub
+		config.GetLogger().Warn("hub offline notifications disabled: DeviceRepositoryUrl is not set")
+		hubOfflineEnabled = false
+	}
 	mongoClient, err := newMongoClient(ctx, config)
 	if err != nil {
 		return nil, err
 	}
-	return &Controller{config: config, mongo: mongoClient, roundTime: roundTime, deviceRepo: devicerepo.NewClient(config.DeviceRepositoryUrl, nil)}, nil
+	controller := &Controller{
+		config:            config,
+		mongo:             mongoClient,
+		roundTime:         roundTime,
+		deviceRepo:        devicerepo.NewClient(config.DeviceRepositoryUrl, nil),
+		hubOfflineEnabled: hubOfflineEnabled,
+		hubOfflineDelay:   hubOfflineDelay,
+	}
+	if hubOfflineEnabled {
+		go controller.runHubOfflineNotifications(ctx, hubOfflineInterval)
+	}
+	return controller, nil
 }
 
 func (this *Controller) LogHub(hublog model.HubLog) error {
@@ -66,6 +89,10 @@ func (this *Controller) LogHub(hublog model.HubLog) error {
 		return err
 	}
 	if updated {
+		err = this.trackHubOfflineStates([]model.HubLog{hublog})
+		if err != nil {
+			return err
+		}
 		err = this.logGatewayHistory(hublog)
 	}
 	return err
@@ -97,6 +124,10 @@ func (this *Controller) LogHubs(logs []model.HubLog) error {
 			}
 		}
 		err = this.setHubStates(newStates)
+		if err != nil {
+			return err
+		}
+		err = this.trackHubOfflineStates(newStates)
 		if err != nil {
 			return err
 		}

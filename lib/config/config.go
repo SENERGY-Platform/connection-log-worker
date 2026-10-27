@@ -41,8 +41,14 @@ type Config struct {
 	DeviceStateCollection                   string
 	HubStateCollection                      string
 	DeviceOfflineNotificationInfoCollection string
+	HubOfflineNotificationInfoCollection    string
 
 	NotificationUrl string
+
+	// HubOfflineNotificationDelay is how long a hub must stay offline before its owner is notified;
+	// empty or "-" disables hub offline notifications.
+	HubOfflineNotificationDelay    string
+	HubOfflineNotificationInterval string
 
 	InfluxdbUrl     string
 	InfluxdbDb      string

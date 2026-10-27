@@ -7,8 +7,11 @@
   "DeviceStateCollection": "devicestate",
   "HubStateCollection": "gatewaystate",
   "DeviceOfflineNotificationInfoCollection": "device_offline_notification_info",
+  "HubOfflineNotificationInfoCollection": "hub_offline_notification_info",
 
   "NotificationUrl": "http://api.notifier:5000",
+  "HubOfflineNotificationDelay": "30m",
+  "HubOfflineNotificationInterval": "1m",
 
   "DeviceLogTopic": "device_log",
   "HubLogTopic": "gateway_log",
