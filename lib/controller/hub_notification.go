@@ -44,22 +44,27 @@ type HubOfflineNotificationInfo struct {
 
 // parseHubOfflineNotificationConfig reports the feature as disabled when the delay is empty or "-".
 func parseHubOfflineNotificationConfig(conf config.Config) (enabled bool, delay time.Duration, interval time.Duration, err error) {
-	if conf.HubOfflineNotificationDelay == "" || conf.HubOfflineNotificationDelay == "-" {
+	return parseNotificationTimings("HubOfflineNotification", conf.HubOfflineNotificationDelay, conf.HubOfflineNotificationInterval)
+}
+
+// parseNotificationTimings validates a delay/interval pair; name prefixes the config keys in errors.
+func parseNotificationTimings(name string, delayValue string, intervalValue string) (enabled bool, delay time.Duration, interval time.Duration, err error) {
+	if delayValue == "" || delayValue == "-" {
 		return false, 0, 0, nil
 	}
-	delay, err = time.ParseDuration(conf.HubOfflineNotificationDelay)
+	delay, err = time.ParseDuration(delayValue)
 	if err != nil {
-		return false, 0, 0, fmt.Errorf("invalid HubOfflineNotificationDelay: %w", err)
+		return false, 0, 0, fmt.Errorf("invalid %sDelay: %w", name, err)
 	}
 	if delay < 0 {
-		return false, 0, 0, fmt.Errorf("invalid HubOfflineNotificationDelay: %v must not be negative", delay)
+		return false, 0, 0, fmt.Errorf("invalid %sDelay: %v must not be negative", name, delay)
 	}
-	interval, err = time.ParseDuration(conf.HubOfflineNotificationInterval)
+	interval, err = time.ParseDuration(intervalValue)
 	if err != nil {
-		return false, 0, 0, fmt.Errorf("invalid HubOfflineNotificationInterval: %w", err)
+		return false, 0, 0, fmt.Errorf("invalid %sInterval: %w", name, err)
 	}
 	if interval <= 0 {
-		return false, 0, 0, fmt.Errorf("invalid HubOfflineNotificationInterval: %v must be positive", interval)
+		return false, 0, 0, fmt.Errorf("invalid %sInterval: %v must be positive", name, interval)
 	}
 	return true, delay, interval, nil
 }
@@ -112,8 +117,8 @@ func (this *Controller) getHubOfflineNotificationInfoCollection() *mongo.Collect
 	return this.mongo.Database(this.config.MongoDatabase).Collection(this.config.HubOfflineNotificationInfoCollection)
 }
 
-// runHubOfflineNotifications never returns before ctx is done: a failing tick is logged and retried on the next one.
-func (this *Controller) runHubOfflineNotifications(ctx context.Context, interval time.Duration) {
+// runPeriodically never returns before ctx is done: a failing or panicking tick is logged and retried on the next one.
+func (this *Controller) runPeriodically(ctx context.Context, name string, interval time.Duration, tick func(ctx context.Context)) {
 	ticker := time.NewTicker(interval)
 	defer ticker.Stop()
 	for {
@@ -121,18 +126,18 @@ func (this *Controller) runHubOfflineNotifications(ctx context.Context, interval
 		case <-ctx.Done():
 			return
 		case <-ticker.C:
-			this.notifyOfflineHubsSafely(ctx)
+			this.runTickSafely(ctx, name, tick)
 		}
 	}
 }
 
-func (this *Controller) notifyOfflineHubsSafely(ctx context.Context) {
+func (this *Controller) runTickSafely(ctx context.Context, name string, tick func(ctx context.Context)) {
 	defer func() {
 		if r := recover(); r != nil {
-			this.config.GetLogger().Error("hub offline notification tick panicked", "error", fmt.Sprint(r))
+			this.config.GetLogger().Error(name+" tick panicked", "error", fmt.Sprint(r))
 		}
 	}()
-	this.notifyOfflineHubs(ctx)
+	tick(ctx)
 }
 
 func (this *Controller) notifyOfflineHubs(ctx context.Context) {

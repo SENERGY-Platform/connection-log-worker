@@ -25,4 +25,5 @@ type Controller interface {
 	LogDevice(log model.DeviceLog) error
 	UpdateDevice(command model.DeviceCommand) error
 	UpdateHub(command model.HubCommand) error
+	LogHubHealth(message model.HubHealthMessage) error
 }

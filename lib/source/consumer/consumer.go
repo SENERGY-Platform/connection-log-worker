@@ -30,6 +30,10 @@ func Start(ctx context.Context, config config.Config, control listener.Controlle
 			config.GetLogger().Error("unable to create listener", "topic", topic, "error", err)
 			return err
 		}
+		if handler == nil {
+			// a factory without a listener is disabled by its topic config
+			continue
+		}
 		err = RunConsumer(ctx, config.KafkaUrl, config.KafkaGroupId, topic, config.InitTopics, func(topic string, msg []byte) error {
 			config.GetLogger().Debug("consume", "topic", topic, "msg", string(msg))
 			return handler(msg)

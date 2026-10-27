@@ -6,5 +6,6 @@ type Controller interface {
 	LogHubs(logs []model.HubLog) error
 	LogDevices(logs []model.DeviceLog) error
 	UpdateHubs(commands []model.HubCommand) error
+	LogHubHealths(messages []model.HubHealthMessage) error
 	UpdateDevices(commands []model.DeviceCommand) error
 }

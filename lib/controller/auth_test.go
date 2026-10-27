@@ -81,6 +81,8 @@ func TestMongoStartAuthenticates(t *testing.T) {
 		assertIndexes(t, root, testDB, "devicestate", "device_1")
 		assertIndexes(t, root, testDB, "gatewaystate", "gateway_1")
 		assertIndexes(t, root, testDB, "device_offline_notification_info", "device_id_1")
+		assertIndexes(t, root, testDB, "gatewayhealth", "hub_id_1")
+		assertIndexes(t, root, testDB, "hub_unhealthy_notification_info", "hub_id_1")
 		// A second start against the existing indexes must not fail.
 		if _, err = New(ctx, authTestConfig(url, svcUser, svcPassword, testDB)); err != nil {
 			t.Errorf("restart: %v", err)

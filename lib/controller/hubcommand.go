@@ -30,7 +30,11 @@ func (this *Controller) UpdateHub(command model.HubCommand) error {
 		if err != nil {
 			return err
 		}
-		return this.removeHubOfflineNotificationInfos([]string{command.Id})
+		err = this.removeHubOfflineNotificationInfos([]string{command.Id})
+		if err != nil {
+			return err
+		}
+		return this.removeHubHealthData([]string{command.Id})
 	}
 	return nil
 }
@@ -53,5 +57,9 @@ func (this *Controller) UpdateHubs(commands []model.HubCommand) error {
 	if err != nil {
 		return err
 	}
-	return this.removeHubOfflineNotificationInfos(ids)
+	err = this.removeHubOfflineNotificationInfos(ids)
+	if err != nil {
+		return err
+	}
+	return this.removeHubHealthData(ids)
 }

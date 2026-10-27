@@ -220,3 +220,32 @@ func captureStdout(t *testing.T, f func()) string {
 	_ = w.Close()
 	return <-done
 }
+
+func TestLoad_HubHealthDefaultsAndEnvNames(t *testing.T) {
+	env := map[string]string{
+		"HUB_HEALTH_TOPIC":                           "gateway_health",
+		"HUB_HEALTH_COLLECTION":                      "health",
+		"HUB_UNHEALTHY_NOTIFICATION_INFO_COLLECTION": "unhealthy",
+		"HUB_UNHEALTHY_NOTIFICATION_DELAY":           "5m",
+		"HUB_UNHEALTHY_NOTIFICATION_INTERVAL":        "10s",
+	}
+	for k := range env {
+		t.Setenv(k, "")
+	}
+	got := load(t, "../../config.json")
+	if got.HubHealthTopic != "-" || got.HubHealthCollection != "gatewayhealth" ||
+		got.HubUnhealthyNotificationInfoCollection != "hub_unhealthy_notification_info" ||
+		got.HubUnhealthyNotificationDelay != "10m" || got.HubUnhealthyNotificationInterval != "1m" {
+		t.Errorf("unexpected defaults %+v", got)
+	}
+
+	for k, v := range env {
+		t.Setenv(k, v)
+	}
+	got = load(t, "../../config.json")
+	if got.HubHealthTopic != "gateway_health" || got.HubHealthCollection != "health" ||
+		got.HubUnhealthyNotificationInfoCollection != "unhealthy" ||
+		got.HubUnhealthyNotificationDelay != "5m" || got.HubUnhealthyNotificationInterval != "10s" {
+		t.Errorf("environment variables not applied: %+v", got)
+	}
+}

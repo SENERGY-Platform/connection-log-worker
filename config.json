@@ -8,15 +8,20 @@
   "HubStateCollection": "gatewaystate",
   "DeviceOfflineNotificationInfoCollection": "device_offline_notification_info",
   "HubOfflineNotificationInfoCollection": "hub_offline_notification_info",
+  "HubHealthCollection": "gatewayhealth",
+  "HubUnhealthyNotificationInfoCollection": "hub_unhealthy_notification_info",
 
   "NotificationUrl": "http://api.notifier:5000",
   "HubOfflineNotificationDelay": "30m",
   "HubOfflineNotificationInterval": "1m",
+  "HubUnhealthyNotificationDelay": "10m",
+  "HubUnhealthyNotificationInterval": "1m",
 
   "DeviceLogTopic": "device_log",
   "HubLogTopic": "gateway_log",
   "DeviceTopic": "devices",
   "HubTopic": "hubs",
+  "HubHealthTopic": "-",
 
   "InfluxdbUrl": "http://influxdb:8086",
   "InfluxdbDb": "connectionlog",

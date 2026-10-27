@@ -40,6 +40,9 @@ type Controller struct {
 
 	hubOfflineEnabled bool
 	hubOfflineDelay   time.Duration
+
+	hubUnhealthyEnabled bool
+	hubUnhealthyDelay   time.Duration
 }
 
 // New connects to MongoDB and fails when the authenticated startup check or the index creation fails;
@@ -58,6 +61,15 @@ func New(ctx context.Context, config config.Config) (*Controller, error) {
 		config.GetLogger().Warn("hub offline notifications disabled: DeviceRepositoryUrl is not set")
 		hubOfflineEnabled = false
 	}
+	hubUnhealthyEnabled, hubUnhealthyDelay, hubUnhealthyInterval, err := parseHubUnhealthyNotificationConfig(config)
+	if err != nil {
+		return nil, err
+	}
+	if hubUnhealthyEnabled && (config.DeviceRepositoryUrl == "" || config.DeviceRepositoryUrl == "-") {
+		// the device-repository provides owner and name of the hub
+		config.GetLogger().Warn("hub unhealthy notifications disabled: DeviceRepositoryUrl is not set")
+		hubUnhealthyEnabled = false
+	}
 	mongoClient, err := newMongoClient(ctx, config)
 	if err != nil {
 		return nil, err
@@ -69,9 +81,15 @@ func New(ctx context.Context, config config.Config) (*Controller, error) {
 		deviceRepo:        devicerepo.NewClient(config.DeviceRepositoryUrl, nil),
 		hubOfflineEnabled: hubOfflineEnabled,
 		hubOfflineDelay:   hubOfflineDelay,
+
+		hubUnhealthyEnabled: hubUnhealthyEnabled,
+		hubUnhealthyDelay:   hubUnhealthyDelay,
 	}
 	if hubOfflineEnabled {
-		go controller.runHubOfflineNotifications(ctx, hubOfflineInterval)
+		go controller.runPeriodically(ctx, "hub offline notification", hubOfflineInterval, controller.notifyOfflineHubs)
+	}
+	if hubUnhealthyEnabled {
+		go controller.runPeriodically(ctx, "hub unhealthy notification", hubUnhealthyInterval, controller.notifyUnhealthyHubs)
 	}
 	return controller, nil
 }

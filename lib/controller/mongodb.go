@@ -117,13 +117,22 @@ func ensureMongoIndexes(ctx context.Context, client *mongo.Client, conf config.C
 	ctx, cancel := context.WithTimeout(ctx, mongoOperationTimeout)
 	defer cancel()
 	db := client.Database(conf.MongoDatabase)
-	for _, index := range []struct{ collection, key string }{
-		{conf.DeviceStateCollection, "device"},
-		{conf.HubStateCollection, "gateway"},
-		{conf.DeviceOfflineNotificationInfoCollection, "device_id"},
-		{conf.HubOfflineNotificationInfoCollection, "hub_id"},
+	for _, index := range []struct {
+		collection, key string
+		unique          bool
+	}{
+		{conf.DeviceStateCollection, "device", false},
+		{conf.HubStateCollection, "gateway", false},
+		{conf.DeviceOfflineNotificationInfoCollection, "device_id", false},
+		{conf.HubOfflineNotificationInfoCollection, "hub_id", false},
+		// unique, so that the conditional upsert of an outdated health report fails instead of adding a second document
+		{conf.HubHealthCollection, "hub_id", true},
+		{conf.HubUnhealthyNotificationInfoCollection, "hub_id", false},
 	} {
-		_, err := db.Collection(index.collection).Indexes().CreateOne(ctx, mongo.IndexModel{Keys: bson.D{{Key: index.key, Value: 1}}})
+		_, err := db.Collection(index.collection).Indexes().CreateOne(ctx, mongo.IndexModel{
+			Keys:    bson.D{{Key: index.key, Value: 1}},
+			Options: options.Index().SetUnique(index.unique),
+		})
 		if err != nil {
 			return fmt.Errorf("mongo index creation on %s.%s failed: %w", conf.MongoDatabase, index.collection, err)
 		}

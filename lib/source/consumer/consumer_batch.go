@@ -20,6 +20,10 @@ func StartBulk(
 			config.GetLogger().Error("unable to create listener", "topic", topic, "error", err)
 			return err
 		}
+		if handler == nil {
+			// a factory without a listener is disabled by its topic config
+			continue
+		}
 		err = RunBatchConsumer(
 			ctx,
 			config.KafkaUrl,

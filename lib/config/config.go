@@ -42,6 +42,9 @@ type Config struct {
 	HubStateCollection                      string
 	DeviceOfflineNotificationInfoCollection string
 	HubOfflineNotificationInfoCollection    string
+	// HubHealthCollection holds the latest health report per hub.
+	HubHealthCollection                    string
+	HubUnhealthyNotificationInfoCollection string
 
 	NotificationUrl string
 
@@ -49,6 +52,11 @@ type Config struct {
 	// empty or "-" disables hub offline notifications.
 	HubOfflineNotificationDelay    string
 	HubOfflineNotificationInterval string
+
+	// HubUnhealthyNotificationDelay is how long a hub must stay unhealthy before its owner is notified;
+	// empty or "-" disables hub unhealthy notifications, the health reports are still stored.
+	HubUnhealthyNotificationDelay    string
+	HubUnhealthyNotificationInterval string
 
 	InfluxdbUrl     string
 	InfluxdbDb      string
@@ -60,6 +68,8 @@ type Config struct {
 	HubLogTopic    string
 	DeviceTopic    string
 	HubTopic       string
+	// HubHealthTopic is the topic of the health reports; empty or "-" disables the consumer.
+	HubHealthTopic string
 
 	KafkaUrl           string
 	KafkaGroupId       string
