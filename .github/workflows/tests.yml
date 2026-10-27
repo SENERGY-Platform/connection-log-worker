@@ -12,7 +12,8 @@ on:
         - dev
 jobs:
   test:
-    runs-on: ubuntu-latest
+    # mongo:8.0 refuses to start on the Ubuntu 26.04 runner kernel (SERVER-136848)
+    runs-on: ubuntu-24.04
     timeout-minutes: 240
     steps:
       - uses: actions/checkout@v3
