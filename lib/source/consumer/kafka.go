@@ -29,6 +29,20 @@ import (
 	"github.com/segmentio/kafka-go"
 )
 
+// all readers of the worker share one group; while a topic of one reader is missing, the group leader
+// assigns no partitions at all, so every reader watches its topic to trigger a rebalance once it exists
+func groupReaderConfig(brokers []string, groupId string, topic string) kafka.ReaderConfig {
+	return kafka.ReaderConfig{
+		CommitInterval:        0, //synchronous commits
+		Brokers:               brokers,
+		GroupID:               groupId,
+		Topic:                 topic,
+		WatchPartitionChanges: true,
+		Logger:                log.New(io.Discard, "", 0),
+		ErrorLogger:           log.New(io.Discard, "", 0),
+	}
+}
+
 func RunConsumer(ctx context.Context, zk string, groupid string, topic string, initTopic bool, listener func(topic string, msg []byte) error, errorhandler func(err error, consumer *Consumer)) (err error) {
 	consumer := &Consumer{groupId: groupid, zkUrl: zk, topic: topic, listener: listener, errorhandler: errorhandler, ctx: ctx, initTopic: initTopic}
 	err = consumer.start()
@@ -62,15 +76,9 @@ func (this *Consumer) start() error {
 			return err
 		}
 	}
-	r := kafka.NewReader(kafka.ReaderConfig{
-		CommitInterval: 0, //synchronous commits
-		Brokers:        broker,
-		GroupID:        this.groupId,
-		Topic:          this.topic,
-		MaxWait:        1 * time.Second,
-		Logger:         log.New(io.Discard, "", 0),
-		ErrorLogger:    log.New(io.Discard, "", 0),
-	})
+	config := groupReaderConfig(broker, this.groupId, this.topic)
+	config.MaxWait = 1 * time.Second
+	r := kafka.NewReader(config)
 	go func() {
 		defer r.Close()
 		defer slog.Info("close kafka topic consumer", "topic", this.topic)

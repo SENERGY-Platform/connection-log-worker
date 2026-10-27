@@ -20,7 +20,6 @@ import (
 	"context"
 	"errors"
 	"io"
-	"log"
 	"log/slog"
 	"sync"
 	"time"
@@ -63,15 +62,9 @@ func (this *BatchConsumer) start() error {
 			return err
 		}
 	}
-	r := kafka.NewReader(kafka.ReaderConfig{
-		CommitInterval: 0, //synchronous commits
-		Brokers:        broker,
-		GroupID:        this.groupId,
-		Topic:          this.topic,
-		Logger:         log.New(io.Discard, "", 0),
-		ErrorLogger:    log.New(io.Discard, "", 0),
-		StartOffset:    kafka.LastOffset,
-	})
+	config := groupReaderConfig(broker, this.groupId, this.topic)
+	config.StartOffset = kafka.LastOffset
+	r := kafka.NewReader(config)
 	go func() {
 		defer r.Close()
 		defer slog.Info("close kafka topic consumer", "topic", this.topic)
