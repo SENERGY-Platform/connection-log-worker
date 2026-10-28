@@ -51,8 +51,26 @@ once, topic `mgw`, title "Network Unhealthy", with the reasons. Before sending
 it re-reads the stored state and drops the tracking if the hub is no longer
 unhealthy. Deleting a hub removes both documents.
 
+## Metrics
+
+With `PROMETHEUS_PORT` set, `/metrics` serves two gauges, read from
+`gatewayhealth` on every scrape:
+
+- `connectionlog_worker_hub_health_state{hub_id}`: the stored state, only for
+  reports received within `HUB_HEALTH_STALE_AGE` (15m, as in connection-log).
+  An offline hub stops reporting, so its last state drops out instead of
+  alerting forever.
+- `connectionlog_worker_hub_health_reports{state}`: number of reports for `0`,
+  `1`, `2` and `stale`. All four series are always present, so `absent()` on it
+  detects a worker that is not scraped.
+
+A failing Mongo query fails the whole scrape. The platform alert on unhealthy
+hubs is defined in rancher-2-defs on these series; it is independent of the
+owner notification above.
+
 ## Configuration
 
 `HUB_HEALTH_TOPIC` defaults to `-`, which registers no consumer; prod enables it
 together with the Kafka topic. `HUB_UNHEALTHY_NOTIFICATION_DELAY=-` disables the
-notification and keeps the storage.
+notification and keeps the storage. `PROMETHEUS_PORT` defaults to `-`, no
+metrics server.
