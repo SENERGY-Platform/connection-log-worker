@@ -226,6 +226,7 @@ func TestLoad_HubHealthDefaultsAndEnvNames(t *testing.T) {
 		"HUB_HEALTH_TOPIC":                           "gateway_health",
 		"HUB_HEALTH_COLLECTION":                      "health",
 		"HUB_UNHEALTHY_NOTIFICATION_INFO_COLLECTION": "unhealthy",
+		"HUB_INACTIVE_COLLECTION":                    "inactive",
 		"HUB_UNHEALTHY_NOTIFICATION_DELAY":           "5m",
 		"HUB_UNHEALTHY_NOTIFICATION_INTERVAL":        "10s",
 	}
@@ -234,7 +235,7 @@ func TestLoad_HubHealthDefaultsAndEnvNames(t *testing.T) {
 	}
 	got := load(t, "../../config.json")
 	if got.HubHealthTopic != "-" || got.HubHealthCollection != "gatewayhealth" ||
-		got.HubUnhealthyNotificationInfoCollection != "hub_unhealthy_notification_info" ||
+		got.HubUnhealthyNotificationInfoCollection != "hub_unhealthy_notification_info" || got.HubInactiveCollection != "hub_inactive" ||
 		got.HubUnhealthyNotificationDelay != "10m" || got.HubUnhealthyNotificationInterval != "1m" {
 		t.Errorf("unexpected defaults %+v", got)
 	}
@@ -244,7 +245,7 @@ func TestLoad_HubHealthDefaultsAndEnvNames(t *testing.T) {
 	}
 	got = load(t, "../../config.json")
 	if got.HubHealthTopic != "gateway_health" || got.HubHealthCollection != "health" ||
-		got.HubUnhealthyNotificationInfoCollection != "unhealthy" ||
+		got.HubUnhealthyNotificationInfoCollection != "unhealthy" || got.HubInactiveCollection != "inactive" ||
 		got.HubUnhealthyNotificationDelay != "5m" || got.HubUnhealthyNotificationInterval != "10s" {
 		t.Errorf("environment variables not applied: %+v", got)
 	}

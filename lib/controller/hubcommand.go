@@ -21,8 +21,12 @@ import (
 )
 
 func (this *Controller) UpdateHub(command model.HubCommand) error {
+	err := this.updateHubInactive([]model.HubCommand{command})
+	if err != nil {
+		return err
+	}
 	if command.Command == "DELETE" {
-		err := this.deleteGatewayLog(command.Id)
+		err = this.deleteGatewayLog(command.Id)
 		if err != nil {
 			return err
 		}
@@ -40,6 +44,10 @@ func (this *Controller) UpdateHub(command model.HubCommand) error {
 }
 
 func (this *Controller) UpdateHubs(commands []model.HubCommand) error {
+	err := this.updateHubInactive(commands)
+	if err != nil {
+		return err
+	}
 	ids := getUniqueStringCondition(commands, func(i model.HubCommand) (bool, string) {
 		if i.Command == "DELETE" {
 			return true, i.Id
@@ -49,7 +57,7 @@ func (this *Controller) UpdateHubs(commands []model.HubCommand) error {
 	if len(ids) == 0 {
 		return nil
 	}
-	err := this.deleteGatewayLogs(ids)
+	err = this.deleteGatewayLogs(ids)
 	if err != nil {
 		return err
 	}

@@ -128,6 +128,8 @@ func ensureMongoIndexes(ctx context.Context, client *mongo.Client, conf config.C
 		// unique, so that the conditional upsert of an outdated health report fails instead of adding a second document
 		{conf.HubHealthCollection, "hub_id", true},
 		{conf.HubUnhealthyNotificationInfoCollection, "hub_id", false},
+		// unique, so that concurrent upserts of the same hub cannot add a second document
+		{conf.HubInactiveCollection, "hub_id", true},
 	} {
 		_, err := db.Collection(index.collection).Indexes().CreateOne(ctx, mongo.IndexModel{
 			Keys:    bson.D{{Key: index.key, Value: 1}},

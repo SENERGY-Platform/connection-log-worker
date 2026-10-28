@@ -21,6 +21,7 @@ import (
 	"encoding/json"
 	"net/http"
 	"net/http/httptest"
+	"strconv"
 	"strings"
 	"sync"
 	"testing"
@@ -240,6 +241,28 @@ func testHubHealth(t *testing.T, batchMode bool) {
 			sendRaw(id+"-dollar", []byte(`{"hub_id":"`+id+`-dollar","time":"2026-10-27T14:00:00Z","report":{"state":2,"core":{"$where":1,"a.b":{"$":1}}}}`))
 			sendReport(id, time.Now(), 1)
 			eventually(t, 30*time.Second, func() bool { state, found := storedState(id); return found && state == 1 })
+		})
+
+		t.Run("inactive hub", func(t *testing.T) {
+			t.Parallel()
+			id := "inactive-hub-unhealthy-" + strconv.FormatBool(batchMode)
+			sendReport(id, time.Now(), 2, "x")
+			eventually(t, 10*time.Second, func() bool { return hasDoc(infos, id) })
+			eventually(t, 30*time.Second, func() bool { return hubReadCount(id) > 0 })
+			waitPastDelay()
+			if got := notifier.forHub(id); len(got) != 0 {
+				t.Errorf("expected no notification, got %#v", got)
+			}
+			// the period counts as notified, so later ticks neither read the hub again nor send
+			if n := hubReadCount(id); n != 1 {
+				t.Errorf("expected the hub to be read once, got %d", n)
+			}
+			if n, err := infos.CountDocuments(ctx, bson.M{"hub_id": id, "notified": true}); err != nil || n != 1 {
+				t.Errorf("expected the tracking to be marked as notified, got %v %v", n, err)
+			}
+			if state, found := storedState(id); !found || state != 2 {
+				t.Errorf("expected the report to be stored, got state=%v found=%v", state, found)
+			}
 		})
 
 		t.Run("deleted hub", func(t *testing.T) {

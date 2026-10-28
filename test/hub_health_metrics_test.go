@@ -27,6 +27,7 @@ import (
 	"github.com/SENERGY-Platform/connection-log-worker/lib/config"
 	"github.com/SENERGY-Platform/connection-log-worker/lib/controller"
 	"github.com/SENERGY-Platform/connection-log-worker/test/server"
+	"github.com/prometheus/client_golang/prometheus"
 	"github.com/prometheus/client_golang/prometheus/testutil"
 	"go.mongodb.org/mongo-driver/bson"
 	"go.mongodb.org/mongo-driver/mongo"
@@ -34,8 +35,9 @@ import (
 )
 
 const (
-	hubHealthStateMetric   = "connectionlog_worker_hub_health_state"
-	hubHealthReportsMetric = "connectionlog_worker_hub_health_reports"
+	hubHealthStateMetric      = "connectionlog_worker_hub_health_state"
+	hubHealthStaleStateMetric = "connectionlog_worker_hub_health_stale_state"
+	hubHealthReportsMetric    = "connectionlog_worker_hub_health_reports"
 )
 
 func TestHubHealthMetrics(t *testing.T) {
@@ -70,10 +72,14 @@ func TestHubHealthMetrics(t *testing.T) {
 	}
 	defer mongoClient.Disconnect(context.Background())
 	healths := mongoClient.Database(conf.MongoDatabase).Collection(conf.HubHealthCollection)
+	inactive := mongoClient.Database(conf.MongoDatabase).Collection(conf.HubInactiveCollection)
 
 	reset := func(t *testing.T, docs ...bson.M) {
 		t.Helper()
 		if _, err := healths.DeleteMany(ctx, bson.M{}); err != nil {
+			t.Fatal(err)
+		}
+		if _, err := inactive.DeleteMany(ctx, bson.M{}); err != nil {
 			t.Fatal(err)
 		}
 		for _, doc := range docs {
@@ -92,7 +98,7 @@ func TestHubHealthMetrics(t *testing.T) {
 		}
 	}
 
-	t.Run("fresh reports are exported per hub, stale ones only counted", func(t *testing.T) {
+	t.Run("fresh reports are exported per hub, stale ones as stale state and counted", func(t *testing.T) {
 		reset(t,
 			report("hub-undetermined", 0, time.Minute),
 			report("hub-healthy", 1, time.Minute),
@@ -105,14 +111,18 @@ func TestHubHealthMetrics(t *testing.T) {
 connectionlog_worker_hub_health_state{hub_id="hub-healthy"} 1
 connectionlog_worker_hub_health_state{hub_id="hub-undetermined"} 0
 connectionlog_worker_hub_health_state{hub_id="hub-unhealthy"} 2
-# HELP connectionlog_worker_hub_health_reports number of stored hub health reports by state (0, 1, 2) and "stale"
+# HELP connectionlog_worker_hub_health_stale_state state of the latest health report per hub (0 undetermined, 1 healthy, 2 unhealthy); only reports that are stale, not of inactive hubs
+# TYPE connectionlog_worker_hub_health_stale_state gauge
+connectionlog_worker_hub_health_stale_state{hub_id="hub-stale"} 2
+# HELP connectionlog_worker_hub_health_reports number of stored hub health reports by state (0, 1, 2), "stale" and "inactive"; the last two are not counted in 0, 1, 2
 # TYPE connectionlog_worker_hub_health_reports gauge
 connectionlog_worker_hub_health_reports{state="0"} 1
 connectionlog_worker_hub_health_reports{state="1"} 1
 connectionlog_worker_hub_health_reports{state="2"} 1
 connectionlog_worker_hub_health_reports{state="stale"} 1
+connectionlog_worker_hub_health_reports{state="inactive"} 0
 `
-		if err := testutil.CollectAndCompare(collector, strings.NewReader(expected), hubHealthStateMetric, hubHealthReportsMetric); err != nil {
+		if err := testutil.CollectAndCompare(collector, strings.NewReader(expected), hubHealthStateMetric, hubHealthStaleStateMetric, hubHealthReportsMetric); err != nil {
 			t.Error(err)
 		}
 	})
@@ -120,14 +130,85 @@ connectionlog_worker_hub_health_reports{state="stale"} 1
 	t.Run("empty collection still reports every state with 0", func(t *testing.T) {
 		reset(t)
 		expected := `
-# HELP connectionlog_worker_hub_health_reports number of stored hub health reports by state (0, 1, 2) and "stale"
+# HELP connectionlog_worker_hub_health_reports number of stored hub health reports by state (0, 1, 2), "stale" and "inactive"; the last two are not counted in 0, 1, 2
 # TYPE connectionlog_worker_hub_health_reports gauge
 connectionlog_worker_hub_health_reports{state="0"} 0
 connectionlog_worker_hub_health_reports{state="1"} 0
 connectionlog_worker_hub_health_reports{state="2"} 0
 connectionlog_worker_hub_health_reports{state="stale"} 0
+connectionlog_worker_hub_health_reports{state="inactive"} 0
 `
-		if err := testutil.CollectAndCompare(collector, strings.NewReader(expected), hubHealthStateMetric, hubHealthReportsMetric); err != nil {
+		if err := testutil.CollectAndCompare(collector, strings.NewReader(expected), hubHealthStateMetric, hubHealthStaleStateMetric, hubHealthReportsMetric); err != nil {
+			t.Error(err)
+		}
+	})
+
+	t.Run("inactive hubs have no series and are counted as inactive", func(t *testing.T) {
+		reset(t,
+			report("hub-active-fresh", 2, time.Minute),
+			report("hub-active-stale", 2, 20*time.Minute),
+			report("hub-inactive-fresh", 2, time.Minute),
+			report("hub-inactive-stale", 2, 20*time.Minute),
+			report("hub-inactive-healthy", 1, time.Minute),
+		)
+		if _, err := inactive.InsertMany(ctx, []any{
+			bson.M{"hub_id": "hub-inactive-fresh"},
+			bson.M{"hub_id": "hub-inactive-stale"},
+			bson.M{"hub_id": "hub-inactive-healthy"},
+			bson.M{"hub_id": "hub-inactive-without-report"},
+		}); err != nil {
+			t.Fatal(err)
+		}
+		expected := `
+# HELP connectionlog_worker_hub_health_state state of the latest health report per hub (0 undetermined, 1 healthy, 2 unhealthy); only reports that are not stale
+# TYPE connectionlog_worker_hub_health_state gauge
+connectionlog_worker_hub_health_state{hub_id="hub-active-fresh"} 2
+# HELP connectionlog_worker_hub_health_stale_state state of the latest health report per hub (0 undetermined, 1 healthy, 2 unhealthy); only reports that are stale, not of inactive hubs
+# TYPE connectionlog_worker_hub_health_stale_state gauge
+connectionlog_worker_hub_health_stale_state{hub_id="hub-active-stale"} 2
+# HELP connectionlog_worker_hub_health_reports number of stored hub health reports by state (0, 1, 2), "stale" and "inactive"; the last two are not counted in 0, 1, 2
+# TYPE connectionlog_worker_hub_health_reports gauge
+connectionlog_worker_hub_health_reports{state="0"} 0
+connectionlog_worker_hub_health_reports{state="1"} 0
+connectionlog_worker_hub_health_reports{state="2"} 1
+connectionlog_worker_hub_health_reports{state="stale"} 1
+connectionlog_worker_hub_health_reports{state="inactive"} 3
+`
+		if err := testutil.CollectAndCompare(collector, strings.NewReader(expected), hubHealthStateMetric, hubHealthStaleStateMetric, hubHealthReportsMetric); err != nil {
+			t.Error(err)
+		}
+	})
+
+	t.Run("a hub that becomes active again is exported again", func(t *testing.T) {
+		reset(t, report("hub-flip", 2, time.Minute))
+		if _, err := inactive.InsertOne(ctx, bson.M{"hub_id": "hub-flip"}); err != nil {
+			t.Fatal(err)
+		}
+		if n := testutil.CollectAndCount(collector, hubHealthStateMetric); n != 0 {
+			t.Fatalf("expected no series while inactive, got %d", n)
+		}
+		if _, err := inactive.DeleteMany(ctx, bson.M{"hub_id": "hub-flip"}); err != nil {
+			t.Fatal(err)
+		}
+		if n := testutil.CollectAndCount(collector, hubHealthStateMetric); n != 1 {
+			t.Errorf("expected 1 series, got %d", n)
+		}
+	})
+
+	t.Run("stale state follows the stored state", func(t *testing.T) {
+		reset(t,
+			report("hub-stale-0", 0, 20*time.Minute),
+			report("hub-stale-1", 1, 20*time.Minute),
+			report("hub-stale-2", 2, 20*time.Minute),
+		)
+		expected := `
+# HELP connectionlog_worker_hub_health_stale_state state of the latest health report per hub (0 undetermined, 1 healthy, 2 unhealthy); only reports that are stale, not of inactive hubs
+# TYPE connectionlog_worker_hub_health_stale_state gauge
+connectionlog_worker_hub_health_stale_state{hub_id="hub-stale-0"} 0
+connectionlog_worker_hub_health_stale_state{hub_id="hub-stale-1"} 1
+connectionlog_worker_hub_health_stale_state{hub_id="hub-stale-2"} 2
+`
+		if err := testutil.CollectAndCompare(collector, strings.NewReader(expected), hubHealthStateMetric, hubHealthStaleStateMetric); err != nil {
 			t.Error(err)
 		}
 	})
@@ -147,12 +228,25 @@ connectionlog_worker_hub_health_reports{state="stale"} 0
 
 	t.Run("an unreadable report fails the scrape", func(t *testing.T) {
 		reset(t, report("hub-broken", "not a number", time.Minute))
-		err := testutil.CollectAndCompare(collector, strings.NewReader(""), hubHealthStateMetric, hubHealthReportsMetric)
+		err := testutil.CollectAndCompare(collector, strings.NewReader(""), hubHealthStateMetric, hubHealthStaleStateMetric, hubHealthReportsMetric)
 		if err == nil {
 			t.Fatal("expected the scrape to fail")
 		}
 		if strings.Contains(err.Error(), "must not leak") || strings.Contains(err.Error(), "hub-broken") {
 			t.Errorf("error leaks report content: %v", err)
+		}
+	})
+
+	t.Run("an unreadable inactive flag fails the scrape", func(t *testing.T) {
+		reset(t, report("hub-ok", 1, time.Minute))
+		if _, err := inactive.InsertOne(ctx, bson.M{"hub_id": 5}); err != nil {
+			t.Fatal(err)
+		}
+		// Gather fails only if the collector reports an error, unlike a mismatch in CollectAndCompare
+		registry := prometheus.NewPedanticRegistry()
+		registry.MustRegister(collector)
+		if _, err := registry.Gather(); err == nil {
+			t.Fatal("expected the scrape to fail")
 		}
 	})
 

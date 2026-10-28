@@ -20,6 +20,8 @@ import (
 	"encoding/json"
 	"errors"
 	"time"
+
+	"github.com/SENERGY-Platform/models/go/models"
 )
 
 type HubLog struct {
@@ -43,10 +45,12 @@ type DeviceCommand struct {
 	Owner   string `json:"owner"`
 }
 
+// HubCommand is a message of the hubs topic; Hub is the full hub on PUT.
 type HubCommand struct {
-	Command string `json:"command"`
-	Id      string `json:"id"`
-	Owner   string `json:"owner"`
+	Command string     `json:"command"`
+	Id      string     `json:"id"`
+	Owner   string     `json:"owner"`
+	Hub     models.Hub `json:"hub"`
 }
 
 // HubHealthMessage is a health report as the platform-connector publishes it. Time is when the

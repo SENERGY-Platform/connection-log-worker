@@ -10,6 +10,7 @@
   "HubOfflineNotificationInfoCollection": "hub_offline_notification_info",
   "HubHealthCollection": "gatewayhealth",
   "HubUnhealthyNotificationInfoCollection": "hub_unhealthy_notification_info",
+  "HubInactiveCollection": "hub_inactive",
 
   "NotificationUrl": "http://api.notifier:5000",
   "HubOfflineNotificationDelay": "30m",

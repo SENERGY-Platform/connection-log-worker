@@ -179,6 +179,11 @@ func (this *Controller) notifyOfflineHub(ctx context.Context, info HubOfflineNot
 		this.releaseHubOfflineClaim(info)
 		return
 	}
+	if isInactive(hub.Attributes) {
+		// the claim stays, so the offline period counts as notified and is not retried
+		logger.Debug("hub is inactive, skip offline notification", "hub-id", info.HubId)
+		return
+	}
 	if hub.OwnerId == "" {
 		logger.Debug("hub has no owner, skip offline notification", "hub-id", info.HubId)
 		return

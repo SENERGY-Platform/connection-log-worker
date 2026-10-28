@@ -37,17 +37,25 @@ const defaultHubHealthStaleAge = 15 * time.Minute
 // hubHealthMetricsTimeout bounds the Mongo query of one scrape.
 const hubHealthMetricsTimeout = 10 * time.Second
 
-// hubHealthStaleLabel is the value of the state label that counts the stale reports.
-const hubHealthStaleLabel = "stale"
+// hubHealthStaleLabel and hubHealthInactiveLabel are the values of the state label that count the stale
+// reports and the reports of inactive hubs.
+const (
+	hubHealthStaleLabel    = "stale"
+	hubHealthInactiveLabel = "inactive"
+)
 
 var (
 	hubHealthStateDesc = prometheus.NewDesc(
 		"connectionlog_worker_hub_health_state",
 		"state of the latest health report per hub (0 undetermined, 1 healthy, 2 unhealthy); only reports that are not stale",
 		[]string{"hub_id"}, nil)
+	hubHealthStaleStateDesc = prometheus.NewDesc(
+		"connectionlog_worker_hub_health_stale_state",
+		"state of the latest health report per hub (0 undetermined, 1 healthy, 2 unhealthy); only reports that are stale, not of inactive hubs",
+		[]string{"hub_id"}, nil)
 	hubHealthReportsDesc = prometheus.NewDesc(
 		"connectionlog_worker_hub_health_reports",
-		"number of stored hub health reports by state (0, 1, 2) and \"stale\"",
+		"number of stored hub health reports by state (0, 1, 2), \"stale\" and \"inactive\"; the last two are not counted in 0, 1, 2",
 		[]string{"state"}, nil)
 )
 
@@ -85,23 +93,33 @@ type hubHealthCollector struct {
 
 func (this *hubHealthCollector) Describe(ch chan<- *prometheus.Desc) {
 	ch <- hubHealthStateDesc
+	ch <- hubHealthStaleStateDesc
 	ch <- hubHealthReportsDesc
 }
 
 func (this *hubHealthCollector) Collect(ch chan<- prometheus.Metric) {
-	reports, err := this.controller.getHubHealthMetricReports()
+	reports, inactive, err := this.controller.getHubHealthMetricData()
 	if err != nil {
 		// the error may carry document content, so only the scrape fails visibly and the log stays generic
 		this.controller.config.GetLogger().Error("unable to collect hub health metrics")
 		ch <- prometheus.NewInvalidMetric(hubHealthStateDesc, err)
+		ch <- prometheus.NewInvalidMetric(hubHealthStaleStateDesc, err)
 		ch <- prometheus.NewInvalidMetric(hubHealthReportsDesc, err)
 		return
 	}
-	counts := map[string]int{"0": 0, "1": 0, "2": 0, hubHealthStaleLabel: 0}
+	counts := map[string]int{"0": 0, "1": 0, "2": 0, hubHealthStaleLabel: 0, hubHealthInactiveLabel: 0}
 	now := time.Now()
 	for _, report := range reports {
+		if inactive[report.HubId] {
+			counts[hubHealthInactiveLabel]++
+			continue
+		}
 		if now.Sub(report.Received) > this.controller.hubHealthStaleAge {
 			counts[hubHealthStaleLabel]++
+			if report.State >= model.HubHealthUndetermined && report.State <= model.HubHealthUnhealthy {
+				// keeps the last state of a hub that stopped reporting, so an alert on unhealthy hubs outlives the gateway going offline
+				ch <- prometheus.MustNewConstMetric(hubHealthStaleStateDesc, prometheus.GaugeValue, float64(report.State), report.HubId)
+			}
 			continue
 		}
 		if report.State < model.HubHealthUndetermined || report.State > model.HubHealthUnhealthy {
@@ -115,16 +133,23 @@ func (this *hubHealthCollector) Collect(ch chan<- prometheus.Metric) {
 	}
 }
 
-// getHubHealthMetricReports loads only the fields the metrics need.
-func (this *Controller) getHubHealthMetricReports() ([]HubHealth, error) {
+// getHubHealthMetricData loads the health reports and the inactive hub ids of one scrape within one timeout.
+// The reports contain only the fields the metrics need.
+func (this *Controller) getHubHealthMetricData() ([]HubHealth, map[string]bool, error) {
 	ctx, cancel := context.WithTimeout(context.Background(), hubHealthMetricsTimeout)
 	defer cancel()
 	opts := options.Find().SetProjection(bson.M{"_id": 0, "hub_id": 1, "state": 1, "received": 1})
 	cursor, err := this.getHubHealthCollection().Find(ctx, bson.M{}, opts)
 	if err != nil {
-		return nil, err
+		return nil, nil, err
 	}
-	var result []HubHealth
-	err = cursor.All(ctx, &result)
-	return result, err
+	var reports []HubHealth
+	if err = cursor.All(ctx, &reports); err != nil {
+		return nil, nil, err
+	}
+	inactive, err := this.getHubInactiveIds(ctx)
+	if err != nil {
+		return nil, nil, err
+	}
+	return reports, inactive, nil
 }

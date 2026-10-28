@@ -21,6 +21,7 @@ import (
 	"encoding/json"
 	"net/http"
 	"net/http/httptest"
+	"strconv"
 	"strings"
 	"sync"
 	"testing"
@@ -233,6 +234,25 @@ func testHubOfflineNotifications(t *testing.T, batchMode bool) {
 			}
 		})
 
+		t.Run("inactive hub", func(t *testing.T) {
+			t.Parallel()
+			id := "inactive-hub-offline-" + strconv.FormatBool(batchMode)
+			sendLog(id, false)
+			eventually(t, 10*time.Second, func() bool { return hasInfo(id) })
+			eventually(t, 30*time.Second, func() bool { return hubReadCount(id) > 0 })
+			waitPastDelay()
+			if got := notifier.forHub(id); len(got) != 0 {
+				t.Errorf("expected no notification, got %#v", got)
+			}
+			// the period counts as notified, so later ticks neither read the hub again nor send
+			if n := hubReadCount(id); n != 1 {
+				t.Errorf("expected the hub to be read once, got %d", n)
+			}
+			if n, err := infos.CountDocuments(ctx, bson.M{"hub_id": id, "notified": true}); err != nil || n != 1 {
+				t.Errorf("expected the tracking to be marked as notified, got %v %v", n, err)
+			}
+		})
+
 		t.Run("unknown to the device-repository", func(t *testing.T) {
 			t.Parallel()
 			id := "unknown-hub"
@@ -312,7 +332,20 @@ func (this *fakeNotifier) forHub(id string) (result []controller.Notification) {
 	return result
 }
 
-// fakeHubRepository answers hub reads, with 404 for ids starting with "unknown", and accepts everything else.
+var (
+	hubReadsMux sync.Mutex
+	hubReads    = map[string]int{}
+)
+
+// hubReadCount is how often fakeHubRepository served a read of the hub; ids must be unique per test run.
+func hubReadCount(id string) int {
+	hubReadsMux.Lock()
+	defer hubReadsMux.Unlock()
+	return hubReads[id]
+}
+
+// fakeHubRepository answers hub reads, with 404 for ids starting with "unknown" and the attribute inactive=true
+// for ids starting with "inactive", and accepts everything else.
 func fakeHubRepository(w http.ResponseWriter, r *http.Request) {
 	id, isHubRead := strings.CutPrefix(r.URL.Path, "/hubs/")
 	if r.Method != http.MethodGet || !isHubRead || strings.Contains(id, "/") {
@@ -323,5 +356,12 @@ func fakeHubRepository(w http.ResponseWriter, r *http.Request) {
 		http.Error(w, "not found", http.StatusNotFound)
 		return
 	}
-	json.NewEncoder(w).Encode(models.Hub{Id: id, Name: "name of " + id, OwnerId: hubOfflineTestOwner})
+	hubReadsMux.Lock()
+	hubReads[id]++
+	hubReadsMux.Unlock()
+	hub := models.Hub{Id: id, Name: "name of " + id, OwnerId: hubOfflineTestOwner}
+	if strings.HasPrefix(id, "inactive") {
+		hub.Attributes = []models.Attribute{{Key: "inactive", Value: "true", Origin: "web-ui"}}
+	}
+	json.NewEncoder(w).Encode(hub)
 }

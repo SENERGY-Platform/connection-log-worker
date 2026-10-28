@@ -156,6 +156,11 @@ func (this *Controller) notifyUnhealthyHub(ctx context.Context, info HubUnhealth
 		this.releaseHubUnhealthyClaim(info)
 		return
 	}
+	if isInactive(hub.Attributes) {
+		// the claim stays, so the unhealthy period counts as notified and is not retried
+		logger.Debug("hub is inactive, skip unhealthy notification", "hub-id", info.HubId)
+		return
+	}
 	if hub.OwnerId == "" {
 		logger.Debug("hub has no owner, skip unhealthy notification", "hub-id", info.HubId)
 		return

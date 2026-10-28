@@ -45,6 +45,9 @@ type Config struct {
 	// HubHealthCollection holds the latest health report per hub.
 	HubHealthCollection                    string
 	HubUnhealthyNotificationInfoCollection string
+	// HubInactiveCollection holds one document {hub_id} per hub whose attribute "inactive" is "true";
+	// such hubs raise no metrics series and no owner notifications.
+	HubInactiveCollection string
 
 	NotificationUrl string
 
