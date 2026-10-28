@@ -249,3 +249,19 @@ func TestLoad_HubHealthDefaultsAndEnvNames(t *testing.T) {
 		t.Errorf("environment variables not applied: %+v", got)
 	}
 }
+
+func TestLoad_MetricsDefaultsAndEnvNames(t *testing.T) {
+	t.Setenv("PROMETHEUS_PORT", "")
+	t.Setenv("HUB_HEALTH_STALE_AGE", "")
+	got := load(t, "../../config.json")
+	if got.PrometheusPort != "-" || got.HubHealthStaleAge != "15m" {
+		t.Errorf("unexpected defaults %q, %q", got.PrometheusPort, got.HubHealthStaleAge)
+	}
+
+	t.Setenv("PROMETHEUS_PORT", "9090")
+	t.Setenv("HUB_HEALTH_STALE_AGE", "30m")
+	got = load(t, "../../config.json")
+	if got.PrometheusPort != "9090" || got.HubHealthStaleAge != "30m" {
+		t.Errorf("environment variables not applied: %q, %q", got.PrometheusPort, got.HubHealthStaleAge)
+	}
+}

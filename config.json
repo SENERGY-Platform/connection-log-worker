@@ -42,5 +42,8 @@
 
   "InitTopics": false,
 
+  "PrometheusPort": "-",
+  "HubHealthStaleAge": "15m",
+
   "LogLevel": "info"
 }

@@ -87,6 +87,12 @@ type Config struct {
 
 	InitTopics bool
 
+	// PrometheusPort is the port of the /metrics server; empty or "-" disables it.
+	PrometheusPort string
+	// HubHealthStaleAge is how old the receive time of a stored health report may be before it counts as stale
+	// and stops being exported per hub; a hub that is offline does not report anymore.
+	HubHealthStaleAge string
+
 	LogLevel string
 	logger   *slog.Logger `json:"-"`
 }

@@ -43,6 +43,8 @@ type Controller struct {
 
 	hubUnhealthyEnabled bool
 	hubUnhealthyDelay   time.Duration
+
+	hubHealthStaleAge time.Duration
 }
 
 // New connects to MongoDB and fails when the authenticated startup check or the index creation fails;
@@ -70,6 +72,10 @@ func New(ctx context.Context, config config.Config) (*Controller, error) {
 		config.GetLogger().Warn("hub unhealthy notifications disabled: DeviceRepositoryUrl is not set")
 		hubUnhealthyEnabled = false
 	}
+	hubHealthStaleAge, err := parseHubHealthStaleAge(config)
+	if err != nil {
+		return nil, err
+	}
 	mongoClient, err := newMongoClient(ctx, config)
 	if err != nil {
 		return nil, err
@@ -84,6 +90,8 @@ func New(ctx context.Context, config config.Config) (*Controller, error) {
 
 		hubUnhealthyEnabled: hubUnhealthyEnabled,
 		hubUnhealthyDelay:   hubUnhealthyDelay,
+
+		hubHealthStaleAge: hubHealthStaleAge,
 	}
 	if hubOfflineEnabled {
 		go controller.runPeriodically(ctx, "hub offline notification", hubOfflineInterval, controller.notifyOfflineHubs)
