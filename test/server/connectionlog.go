@@ -95,8 +95,11 @@ func Influxdb(ctx context.Context, wg *sync.WaitGroup) (hostport string, contain
 		ContainerRequest: testcontainers.ContainerRequest{
 			Image:        "influxdb:1.6.3",
 			ExposedPorts: []string{"8086/tcp"},
+			// with INFLUXDB_DB set, the entrypoint first runs a temporary server bound to the container's localhost to
+			// create the database and then restarts it; the listening port alone is already open during that first run
 			WaitingFor: wait.ForAll(
 				wait.ForListeningPort("8086/tcp"),
+				wait.ForHTTP("/ping").WithPort("8086/tcp").WithStatusCodeMatcher(func(status int) bool { return status == 204 }),
 			),
 			Env: map[string]string{
 				"INFLUXDB_DB":             "connectionlog",
