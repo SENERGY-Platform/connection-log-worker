@@ -56,6 +56,7 @@ func (this *Controller) LogHubHealths(messages []model.HubHealthMessage) error {
 		return nil
 	}
 	var models []mongo.WriteModel
+	var kept []model.HubHealthMessage
 	ids := make([]string, 0, len(newest))
 	for _, message := range newest {
 		doc, err := toHubHealth(message)
@@ -65,6 +66,7 @@ func (this *Controller) LogHubHealths(messages []model.HubHealthMessage) error {
 			continue
 		}
 		ids = append(ids, doc.HubId)
+		kept = append(kept, message)
 		// the filter keeps an older report from replacing a newer one; the insert it then attempts hits the unique index
 		models = append(models, mongo.NewReplaceOneModel().
 			SetFilter(bson.M{"hub_id": doc.HubId, "received": bson.M{"$lte": doc.Received}}).
@@ -74,26 +76,40 @@ func (this *Controller) LogHubHealths(messages []model.HubHealthMessage) error {
 	if len(models) == 0 {
 		return nil
 	}
-	err := this.bulkWriteSkippingRejected(models, ids)
+	rejected, err := this.bulkWriteSkippingRejected(models, ids)
 	if err != nil {
 		return err
 	}
-	return this.trackHubUnhealthyStates(ids)
+	var accepted []model.HubHealthMessage
+	for i, message := range kept {
+		if !rejected[i] {
+			accepted = append(accepted, message)
+		}
+	}
+	err = this.trackHubUnhealthyStates(ids)
+	if err != nil {
+		return err
+	}
+	return this.trackHubModuleUpdates(accepted)
 }
 
 // bulkWriteSkippingRejected tolerates per-document write errors: duplicate keys are the expected outcome of an
 // outdated report, and any other rejected report is logged and dropped, since returning it would end in the
 // consumer's fatal retry path and let one gateway stop the worker. ids holds the hub id of each model.
-func (this *Controller) bulkWriteSkippingRejected(models []mongo.WriteModel, ids []string) error {
+// The result holds the indices of the models that were not stored; the others were written, so a report is
+// accepted if and only if its index is not in it.
+func (this *Controller) bulkWriteSkippingRejected(models []mongo.WriteModel, ids []string) (rejected map[int]bool, err error) {
 	ctx, cancel := mongoOperationContext()
 	defer cancel()
-	_, err := this.getHubHealthCollection().BulkWrite(ctx, models, options.BulkWrite().SetOrdered(false))
+	_, err = this.getHubHealthCollection().BulkWrite(ctx, models, options.BulkWrite().SetOrdered(false))
 	if err == nil {
-		return nil
+		return nil, nil
 	}
 	var bulkErr mongo.BulkWriteException
 	if errors.As(err, &bulkErr) && bulkErr.WriteConcernError == nil && len(bulkErr.WriteErrors) > 0 {
+		rejected = map[int]bool{}
 		for _, writeErr := range bulkErr.WriteErrors {
+			rejected[writeErr.Index] = true
 			if writeErr.Code == mongoDuplicateKeyCode {
 				continue
 			}
@@ -103,9 +119,9 @@ func (this *Controller) bulkWriteSkippingRejected(models []mongo.WriteModel, ids
 			}
 			this.config.GetLogger().Warn("skip hub health report rejected by mongodb", "hub-id", hubId, "code", writeErr.Code, "error", writeErr.Message)
 		}
-		return nil
+		return rejected, nil
 	}
-	return err
+	return nil, err
 }
 
 // newestHubHealthPerHub keeps the report with the latest connector time per hub; on equal times the later one wins.

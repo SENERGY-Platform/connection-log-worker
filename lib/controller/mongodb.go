@@ -118,21 +118,28 @@ func ensureMongoIndexes(ctx context.Context, client *mongo.Client, conf config.C
 	defer cancel()
 	db := client.Database(conf.MongoDatabase)
 	for _, index := range []struct {
-		collection, key string
-		unique          bool
+		collection string
+		keys       []string
+		unique     bool
 	}{
-		{conf.DeviceStateCollection, "device", false},
-		{conf.HubStateCollection, "gateway", false},
-		{conf.DeviceOfflineNotificationInfoCollection, "device_id", false},
-		{conf.HubOfflineNotificationInfoCollection, "hub_id", false},
+		{conf.DeviceStateCollection, []string{"device"}, false},
+		{conf.HubStateCollection, []string{"gateway"}, false},
+		{conf.DeviceOfflineNotificationInfoCollection, []string{"device_id"}, false},
+		{conf.HubOfflineNotificationInfoCollection, []string{"hub_id"}, false},
 		// unique, so that the conditional upsert of an outdated health report fails instead of adding a second document
-		{conf.HubHealthCollection, "hub_id", true},
-		{conf.HubUnhealthyNotificationInfoCollection, "hub_id", false},
+		{conf.HubHealthCollection, []string{"hub_id"}, true},
+		{conf.HubUnhealthyNotificationInfoCollection, []string{"hub_id"}, false},
 		// unique, so that concurrent upserts of the same hub cannot add a second document
-		{conf.HubInactiveCollection, "hub_id", true},
+		{conf.HubInactiveCollection, []string{"hub_id"}, true},
+		// unique, so that the upsert of a pending update cannot add a second document for the same hub and module
+		{conf.HubModuleUpdateInfoCollection, []string{"hub_id", "module_id"}, true},
 	} {
+		keys := bson.D{}
+		for _, key := range index.keys {
+			keys = append(keys, bson.E{Key: key, Value: 1})
+		}
 		_, err := db.Collection(index.collection).Indexes().CreateOne(ctx, mongo.IndexModel{
-			Keys:    bson.D{{Key: index.key, Value: 1}},
+			Keys:    keys,
 			Options: options.Index().SetUnique(index.unique),
 		})
 		if err != nil {

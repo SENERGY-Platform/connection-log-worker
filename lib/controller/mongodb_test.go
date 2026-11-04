@@ -50,6 +50,7 @@ func testMongoConfig() config.Config {
 		HubHealthCollection:                     "gatewayhealth",
 		HubUnhealthyNotificationInfoCollection:  "hub_unhealthy_notification_info",
 		HubInactiveCollection:                   "hub_inactive",
+		HubModuleUpdateInfoCollection:           "hub_module_update_info",
 		RoundTime:                               "1m",
 	}
 }

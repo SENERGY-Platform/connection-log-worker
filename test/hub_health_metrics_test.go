@@ -53,6 +53,7 @@ func TestHubHealthMetrics(t *testing.T) {
 	conf.HubOfflineNotificationDelay = "-"
 	conf.HubUnhealthyNotificationDelay = "-"
 	conf.HubHealthStaleAge = "15m"
+	conf.HubHealthTopic = "gateway_health" // no consumer is started here, the controller only needs to know it is enabled
 	mongoPort, _, err := server.MongoDB(ctx, wg)
 	if err != nil {
 		t.Fatal(err)
@@ -73,14 +74,18 @@ func TestHubHealthMetrics(t *testing.T) {
 	defer mongoClient.Disconnect(context.Background())
 	healths := mongoClient.Database(conf.MongoDatabase).Collection(conf.HubHealthCollection)
 	inactive := mongoClient.Database(conf.MongoDatabase).Collection(conf.HubInactiveCollection)
+	moduleUpdates := mongoClient.Database(conf.MongoDatabase).Collection(conf.HubModuleUpdateInfoCollection)
+	hubStates := mongoClient.Database(conf.MongoDatabase).Collection(conf.HubStateCollection)
 
 	reset := func(t *testing.T, docs ...bson.M) {
 		t.Helper()
 		if _, err := healths.DeleteMany(ctx, bson.M{}); err != nil {
 			t.Fatal(err)
 		}
-		if _, err := inactive.DeleteMany(ctx, bson.M{}); err != nil {
-			t.Fatal(err)
+		for _, c := range []*mongo.Collection{inactive, moduleUpdates, hubStates} {
+			if _, err := c.DeleteMany(ctx, bson.M{}); err != nil {
+				t.Fatal(err)
+			}
 		}
 		for _, doc := range docs {
 			if _, err := healths.InsertOne(ctx, doc); err != nil {
@@ -122,7 +127,48 @@ connectionlog_worker_hub_health_reports{state="2"} 1
 connectionlog_worker_hub_health_reports{state="stale"} 1
 connectionlog_worker_hub_health_reports{state="inactive"} 0
 `
-		if err := testutil.CollectAndCompare(collector, strings.NewReader(expected), hubHealthStateMetric, hubHealthStaleStateMetric, hubHealthReportsMetric); err != nil {
+		// the new gauges have no series without data, so they must not appear next to the expected ones
+		if err := testutil.CollectAndCompare(collector, strings.NewReader(expected), hubHealthStateMetric, hubHealthStaleStateMetric, hubHealthReportsMetric, hubModulesOutdatedMetric, hubHealthMissingMetric); err != nil {
+			t.Error(err)
+		}
+	})
+
+	t.Run("module and missing report gauges", func(t *testing.T) {
+		reset(t, report("hub-reporting", 1, time.Minute))
+		pending := func(hub string, module string, age time.Duration) any {
+			return bson.M{"hub_id": hub, "module_id": module, "name": module, "version": "v1", "next_version": "v2", "pending_since": time.Now().Add(-age).Unix(), "notified": false}
+		}
+		if _, err := moduleUpdates.InsertMany(ctx, []any{
+			pending("hub-old", "a", 200*time.Hour),
+			pending("hub-old", "b", 169*time.Hour),
+			pending("hub-old", "c", time.Hour),
+			pending("hub-young", "a", time.Hour),
+			pending("hub-inactive", "a", 200*time.Hour),
+		}); err != nil {
+			t.Fatal(err)
+		}
+		if _, err := inactive.InsertMany(ctx, []any{bson.M{"hub_id": "hub-inactive"}, bson.M{"hub_id": "hub-inactive-silent"}}); err != nil {
+			t.Fatal(err)
+		}
+		since := func(ago time.Duration) int64 { return time.Now().Add(-ago).Unix() }
+		if _, err := hubStates.InsertMany(ctx, []any{
+			bson.M{"gateway": "hub-silent", "online": true, "since": since(time.Hour)},
+			bson.M{"gateway": "hub-reporting", "online": true, "since": since(time.Hour)},
+			bson.M{"gateway": "hub-new", "online": true, "since": since(time.Minute)},
+			bson.M{"gateway": "hub-offline", "online": false, "since": since(time.Hour)},
+			bson.M{"gateway": "hub-inactive-silent", "online": true, "since": since(time.Hour)},
+		}); err != nil {
+			t.Fatal(err)
+		}
+		expected := `
+# HELP connectionlog_worker_hub_modules_outdated number of modules per hub whose update has been pending for longer than HubModuleOutdatedAge; only hubs with at least one, not of inactive hubs
+# TYPE connectionlog_worker_hub_modules_outdated gauge
+connectionlog_worker_hub_modules_outdated{hub_id="hub-old"} 2
+# HELP connectionlog_worker_hub_health_missing 1 for hubs that have been online for longer than HubHealthStaleAge and have no stored health report; not of inactive hubs, only exported if the health consumer is enabled
+# TYPE connectionlog_worker_hub_health_missing gauge
+connectionlog_worker_hub_health_missing{hub_id="hub-silent"} 1
+`
+		if err := testutil.CollectAndCompare(collector, strings.NewReader(expected), hubModulesOutdatedMetric, hubHealthMissingMetric); err != nil {
 			t.Error(err)
 		}
 	})
@@ -223,6 +269,36 @@ connectionlog_worker_hub_health_stale_state{hub_id="hub-stale-2"} 2
 		}
 		if n := testutil.CollectAndCount(collector, hubHealthStateMetric); n != 1 {
 			t.Errorf("expected 1 series, got %d", n)
+		}
+	})
+
+	t.Run("missing report gauge is quiet without the health consumer", func(t *testing.T) {
+		reset(t)
+		if _, err := hubStates.InsertOne(ctx, bson.M{"gateway": "hub-silent", "online": true, "since": time.Now().Add(-time.Hour).Unix()}); err != nil {
+			t.Fatal(err)
+		}
+		disabledConf := conf
+		disabledConf.HubHealthTopic = "-"
+		disabled, err := controller.New(ctx, disabledConf)
+		if err != nil {
+			t.Fatal(err)
+		}
+		if n := testutil.CollectAndCount(disabled.HubHealthCollector(), hubHealthMissingMetric); n != 0 {
+			t.Errorf("expected no series, got %d", n)
+		}
+		if n := testutil.CollectAndCount(collector, hubHealthMissingMetric); n != 1 {
+			t.Errorf("expected the series with the consumer enabled, got %d", n)
+		}
+	})
+
+	t.Run("an unreadable module update fails the scrape", func(t *testing.T) {
+		reset(t)
+		if _, err := moduleUpdates.InsertOne(ctx, bson.M{"hub_id": 5, "module_id": "a", "pending_since": time.Now().Add(-200 * time.Hour).Unix()}); err != nil {
+			t.Fatal(err)
+		}
+		err := testutil.CollectAndCompare(collector, strings.NewReader(""), hubModulesOutdatedMetric, hubHealthMissingMetric)
+		if err == nil {
+			t.Fatal("expected the scrape to fail")
 		}
 	})
 

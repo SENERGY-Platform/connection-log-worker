@@ -80,3 +80,65 @@ func TestParseHubHealthMessage(t *testing.T) {
 		}
 	})
 }
+
+func TestParseHubHealthMessageModuleVersions(t *testing.T) {
+	parse := func(t *testing.T, extra string) HubHealthMessage {
+		t.Helper()
+		raw := `{"hub_id":"h1","time":"2026-10-27T14:00:00Z","report":{"state":1` + extra + `}}`
+		msg, err := ParseHubHealthMessage([]byte(raw))
+		if err != nil {
+			t.Fatalf("the report must be stored whatever module_versions holds: %v", err)
+		}
+		return msg
+	}
+
+	t.Run("typed entries", func(t *testing.T) {
+		msg := parse(t, `,"module_versions":[{"id":"github.com/x/a","name":"A","source":"s","channel":"main","version":"v1","next_version":"v2"},{"id":"github.com/x/b","version":"v3","next_version":""}],"module_versions_error":""`)
+		expected := []ModuleVersion{
+			{Id: "github.com/x/a", Name: "A", Source: "s", Channel: "main", Version: "v1", NextVersion: "v2"},
+			{Id: "github.com/x/b", Version: "v3"},
+		}
+		if !msg.ModuleVersionsKnown || !reflect.DeepEqual(expected, msg.ModuleVersions) {
+			t.Errorf("unexpected %v %#v", msg.ModuleVersionsKnown, msg.ModuleVersions)
+		}
+	})
+
+	t.Run("empty list is known", func(t *testing.T) {
+		msg := parse(t, `,"module_versions":[]`)
+		if !msg.ModuleVersionsKnown || len(msg.ModuleVersions) != 0 {
+			t.Errorf("unexpected %v %#v", msg.ModuleVersionsKnown, msg.ModuleVersions)
+		}
+	})
+
+	t.Run("absent and null are unknown", func(t *testing.T) {
+		for name, extra := range map[string]string{
+			"absent": ``,
+			"null":   `,"module_versions":null,"module_versions_error":"module manager unreachable"`,
+		} {
+			if msg := parse(t, extra); msg.ModuleVersionsKnown || msg.ModuleVersions != nil {
+				t.Errorf("%s: expected unknown, got %v %#v", name, msg.ModuleVersionsKnown, msg.ModuleVersions)
+			}
+		}
+	})
+
+	t.Run("malformed is unknown and keeps the report", func(t *testing.T) {
+		for name, extra := range map[string]string{
+			"object":        `,"module_versions":{"id":"x"}`,
+			"string":        `,"module_versions":"x"`,
+			"wrong field":   `,"module_versions":[{"id":5}]`,
+			"wrong element": `,"module_versions":["x"]`,
+		} {
+			msg := parse(t, extra)
+			if msg.ModuleVersionsKnown || msg.ModuleVersions != nil || msg.State != 1 {
+				t.Errorf("%s: expected unknown with the state kept, got %v %#v state %d", name, msg.ModuleVersionsKnown, msg.ModuleVersions, msg.State)
+			}
+		}
+	})
+
+	t.Run("entries without id are skipped", func(t *testing.T) {
+		msg := parse(t, `,"module_versions":[{"name":"no id","next_version":"v2"},null,{"id":"","next_version":"v2"},{"id":"a","next_version":"v2"}]`)
+		if !msg.ModuleVersionsKnown || !reflect.DeepEqual([]ModuleVersion{{Id: "a", NextVersion: "v2"}}, msg.ModuleVersions) {
+			t.Errorf("unexpected %v %#v", msg.ModuleVersionsKnown, msg.ModuleVersions)
+		}
+	})
+}

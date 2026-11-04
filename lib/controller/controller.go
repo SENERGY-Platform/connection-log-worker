@@ -45,6 +45,13 @@ type Controller struct {
 	hubUnhealthyDelay   time.Duration
 
 	hubHealthStaleAge time.Duration
+	// hubHealthConsumerEnabled is the condition that registers the health listener; without it no report
+	// ever arrives and hub_health_missing would fire for every online hub.
+	hubHealthConsumerEnabled bool
+
+	// hubModuleOutdatedAge applies to the notification and the metric; the notification alone can be disabled.
+	hubModuleOutdatedEnabled bool
+	hubModuleOutdatedAge     time.Duration
 }
 
 // New connects to MongoDB and fails when the authenticated startup check or the index creation fails;
@@ -76,6 +83,15 @@ func New(ctx context.Context, config config.Config) (*Controller, error) {
 	if err != nil {
 		return nil, err
 	}
+	hubModuleOutdatedAge, hubModuleOutdatedEnabled, hubModuleOutdatedInterval, err := parseHubModuleOutdatedConfig(config)
+	if err != nil {
+		return nil, err
+	}
+	if hubModuleOutdatedEnabled && (config.DeviceRepositoryUrl == "" || config.DeviceRepositoryUrl == "-") {
+		// the device-repository provides owner and name of the hub
+		config.GetLogger().Warn("hub module outdated notifications disabled: DeviceRepositoryUrl is not set")
+		hubModuleOutdatedEnabled = false
+	}
 	mongoClient, err := newMongoClient(ctx, config)
 	if err != nil {
 		return nil, err
@@ -91,13 +107,20 @@ func New(ctx context.Context, config config.Config) (*Controller, error) {
 		hubUnhealthyEnabled: hubUnhealthyEnabled,
 		hubUnhealthyDelay:   hubUnhealthyDelay,
 
-		hubHealthStaleAge: hubHealthStaleAge,
+		hubHealthStaleAge:        hubHealthStaleAge,
+		hubHealthConsumerEnabled: config.HubHealthTopic != "" && config.HubHealthTopic != "-",
+
+		hubModuleOutdatedEnabled: hubModuleOutdatedEnabled,
+		hubModuleOutdatedAge:     hubModuleOutdatedAge,
 	}
 	if hubOfflineEnabled {
 		go controller.runPeriodically(ctx, "hub offline notification", hubOfflineInterval, controller.notifyOfflineHubs)
 	}
 	if hubUnhealthyEnabled {
 		go controller.runPeriodically(ctx, "hub unhealthy notification", hubUnhealthyInterval, controller.notifyUnhealthyHubs)
+	}
+	if hubModuleOutdatedEnabled {
+		go controller.runPeriodically(ctx, "hub module outdated notification", hubModuleOutdatedInterval, controller.notifyOutdatedModuleHubs)
 	}
 	return controller, nil
 }

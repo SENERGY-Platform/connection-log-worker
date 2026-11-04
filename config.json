@@ -11,12 +11,15 @@
   "HubHealthCollection": "gatewayhealth",
   "HubUnhealthyNotificationInfoCollection": "hub_unhealthy_notification_info",
   "HubInactiveCollection": "hub_inactive",
+  "HubModuleUpdateInfoCollection": "hub_module_update_info",
 
   "NotificationUrl": "http://api.notifier:5000",
   "HubOfflineNotificationDelay": "30m",
   "HubOfflineNotificationInterval": "1m",
   "HubUnhealthyNotificationDelay": "10m",
   "HubUnhealthyNotificationInterval": "1m",
+  "HubModuleOutdatedAge": "168h",
+  "HubModuleOutdatedNotificationInterval": "1m",
 
   "DeviceLogTopic": "device_log",
   "HubLogTopic": "gateway_log",

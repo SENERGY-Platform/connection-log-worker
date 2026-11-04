@@ -48,6 +48,8 @@ type Config struct {
 	// HubInactiveCollection holds one document {hub_id} per hub whose attribute "inactive" is "true";
 	// such hubs raise no metrics series and no owner notifications.
 	HubInactiveCollection string
+	// HubModuleUpdateInfoCollection holds one document per hub and module with a pending update.
+	HubModuleUpdateInfoCollection string
 
 	NotificationUrl string
 
@@ -60,6 +62,13 @@ type Config struct {
 	// empty or "-" disables hub unhealthy notifications, the health reports are still stored.
 	HubUnhealthyNotificationDelay    string
 	HubUnhealthyNotificationInterval string
+
+	// HubModuleOutdatedAge is how long a module update must be pending before it counts as outdated,
+	// for the owner notification and the metric.
+	HubModuleOutdatedAge string
+	// HubModuleOutdatedNotificationInterval is how often the worker looks for outdated modules to notify about;
+	// empty or "-" disables the notification, the tracking and the metric stay.
+	HubModuleOutdatedNotificationInterval string
 
 	InfluxdbUrl     string
 	InfluxdbDb      string
