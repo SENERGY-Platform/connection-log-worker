@@ -70,11 +70,13 @@ type Config struct {
 	// empty or "-" disables the notification, the tracking and the metric stay.
 	HubModuleOutdatedNotificationInterval string
 
-	InfluxdbUrl     string
-	InfluxdbDb      string
-	InfluxdbUser    string `config:"secret"`
-	InfluxdbPw      string `config:"secret"`
-	InfluxdbTimeout int64
+	// The connection history is written to the TimescaleDB database PostgresDb; the worker owns its tables.
+	PostgresHost string
+	// PostgresPort is an int64 because the environment loader only converts int64, string, bool, float64, slices and maps.
+	PostgresPort int64
+	PostgresUser string `config:"secret"`
+	PostgresPw   string `config:"secret"`
+	PostgresDb   string
 
 	DeviceLogTopic string
 	HubLogTopic    string

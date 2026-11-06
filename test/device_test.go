@@ -19,8 +19,12 @@ package test
 import (
 	"context"
 	"encoding/json"
+	"fmt"
 	"log"
+	"net"
+	"net/url"
 	"reflect"
+	"strconv"
 	"sync"
 	"testing"
 	"time"
@@ -34,7 +38,7 @@ import (
 	"github.com/SENERGY-Platform/connection-log-worker/test/server"
 	"github.com/SENERGY-Platform/models/go/models"
 	"github.com/google/uuid"
-	"github.com/influxdata/influxdb/client/v2"
+	"github.com/jackc/pgx/v5"
 	"github.com/segmentio/kafka-go"
 )
 
@@ -97,7 +101,7 @@ func testStateAfterDelete(config config.Config, connectionlog string, initialSta
 		time.Sleep(10 * time.Second)
 
 		t.Run("check device log", func(t *testing.T) {
-			checkDeviceLog(t, connectionlog, deviceId, state, count)
+			checkDeviceLog(t, config, connectionlog, deviceId, state, count)
 		})
 
 		t.Run("send device delete", func(t *testing.T) {
@@ -107,7 +111,7 @@ func testStateAfterDelete(config config.Config, connectionlog string, initialSta
 		time.Sleep(10 * time.Second)
 
 		t.Run("check device log", func(t *testing.T) {
-			checkDeviceLogs(t, connectionlog, []string{deviceId}, map[string]bool{}, 0)
+			checkDeviceLogs(t, config, connectionlog, []string{deviceId}, map[string]bool{}, 0)
 		})
 	}
 }
@@ -191,58 +195,55 @@ func testStateUpdate(config config.Config, connectionlog string, initialState bo
 		time.Sleep(10 * time.Second)
 
 		t.Run("check device log", func(t *testing.T) {
-			checkDeviceLog(t, connectionlog, deviceId, state, count)
+			checkDeviceLog(t, config, connectionlog, deviceId, state, count)
 		})
 
 		t.Run("check hub log", func(t *testing.T) {
-			checkHubLog(t, connectionlog, hubId, state, count)
+			checkHubLog(t, config, connectionlog, hubId, state, count)
 		})
 	}
 }
 
-func checkDeviceLog(t *testing.T, connectionlogUrl string, id string, state bool, count int) {
+func checkDeviceLog(t *testing.T, conf config.Config, connectionlogUrl string, id string, state bool, count int) {
 	t.Run("check device state", func(t *testing.T) {
 		checkDeviceState(t, connectionlogUrl, id, state)
 	})
 	t.Run("check device history", func(t *testing.T) {
-		checkDeviceHistory(t, connectionlogUrl, id, count)
+		checkHistoryRows(t, conf, "device", []string{id}, count)
 	})
 }
 
-func checkDeviceLogs(t *testing.T, connectionlogUrl string, ids []string, expectedStates map[string]bool, count int) {
+func checkDeviceLogs(t *testing.T, conf config.Config, connectionlogUrl string, ids []string, expectedStates map[string]bool, count int) {
 	t.Run("check device state", func(t *testing.T) {
 		checkDeviceStates(t, connectionlogUrl, ids, expectedStates)
 	})
 	t.Run("check device history", func(t *testing.T) {
-		checkDeviceHistorys(t, connectionlogUrl, ids, count)
+		checkHistoryRows(t, conf, "device", ids, count)
 	})
 }
 
-func checkDeviceHistory(t *testing.T, connectionlogUrl string, id string, count int) {
-	checkDeviceHistorys(t, connectionlogUrl, []string{id}, count)
-}
-
-func checkDeviceHistorys(t *testing.T, connectionlogUrl string, ids []string, count int) {
-	result := []client.Result{}
-	err := helper.AdminPost(connectionlogUrl+"/intern/history/device/1h", ids, &result)
+// checkHistoryRows reads the history table directly, so these tests need no connection-log image that reads it.
+func checkHistoryRows(t *testing.T, conf config.Config, table string, ids []string, count int) {
+	t.Helper()
+	if table != "device" && table != "gateway" {
+		t.Fatal("unknown history table", table)
+	}
+	ctx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
+	defer cancel()
+	conn, err := pgx.Connect(ctx, fmt.Sprintf("postgres://%s:%s@%s/%s",
+		url.QueryEscape(conf.PostgresUser), url.QueryEscape(conf.PostgresPw),
+		net.JoinHostPort(conf.PostgresHost, strconv.FormatInt(conf.PostgresPort, 10)), url.PathEscape(conf.PostgresDb)))
 	if err != nil {
-		t.Error(err)
-		return
+		t.Fatal("unable to connect to the history database:", err)
 	}
-	if len(result) != 1 {
-		t.Fatal(len(result), result)
+	defer conn.Close(ctx)
+	var got int
+	err = conn.QueryRow(ctx, "SELECT count(*) FROM "+table+" WHERE id = ANY($1)", ids).Scan(&got)
+	if err != nil {
+		t.Fatal(err)
 	}
-	if result[0].Err != "" {
-		t.Fatal(result[0].Err)
-	}
-	if len(result[0].Series) != 1 {
-		if count != 0 {
-			t.Fatal(len(result[0].Series), result[0].Series)
-		}
-		return
-	}
-	if len(result[0].Series[0].Values) != count {
-		t.Fatal(len(result[0].Series[0].Values), result[0].Series[0].Values)
+	if got != count {
+		t.Fatalf("expected %d history rows in %s for %v, got %d", count, table, ids, got)
 	}
 }
 
@@ -262,34 +263,13 @@ func checkDeviceStates(t *testing.T, connectionlogUrl string, ids []string, expe
 	}
 }
 
-func checkHubLog(t *testing.T, connectionlogUrl string, id string, state bool, count int) {
+func checkHubLog(t *testing.T, conf config.Config, connectionlogUrl string, id string, state bool, count int) {
 	t.Run("check hub state", func(t *testing.T) {
 		checkHubState(t, connectionlogUrl, id, state)
 	})
 	t.Run("check hub history", func(t *testing.T) {
-		checkHubHistory(t, connectionlogUrl, id, count)
+		checkHistoryRows(t, conf, "gateway", []string{id}, count)
 	})
-}
-
-func checkHubHistory(t *testing.T, connectionlogUrl string, id string, count int) {
-	result := []client.Result{}
-	err := helper.AdminPost(connectionlogUrl+"/intern/history/gateway/1h", []string{id}, &result)
-	if err != nil {
-		t.Error(err)
-		return
-	}
-	if len(result) != 1 {
-		t.Fatal(len(result), result)
-	}
-	if result[0].Err != "" {
-		t.Fatal(result[0].Err)
-	}
-	if len(result[0].Series) != 1 {
-		t.Fatal(len(result[0].Series), result[0].Series)
-	}
-	if len(result[0].Series[0].Values) != count {
-		t.Fatal(len(result[0].Series[0].Values), result[0].Series[0].Values)
-	}
 }
 
 func checkHubState(t *testing.T, connectionlogUrl string, id string, state bool) {

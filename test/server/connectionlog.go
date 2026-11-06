@@ -21,16 +21,19 @@ import (
 	"fmt"
 	"io"
 	"log"
+	"strconv"
 	"strings"
 	"sync"
+	"time"
 
+	"github.com/SENERGY-Platform/connection-log-worker/lib/config"
 	"github.com/testcontainers/testcontainers-go"
 	"github.com/testcontainers/testcontainers-go/wait"
 )
 
 // Connectionlog reads the states the worker writes, so it gets the worker's database under both its current
 // setting name (MONGO_TABLE) and the contract name (MONGO_DATABASE).
-func Connectionlog(ctx context.Context, wg *sync.WaitGroup, mongourl string, mongoDatabase string, influxurl string, permV2Url string) (hostport string, containerip string, err error) {
+func Connectionlog(ctx context.Context, wg *sync.WaitGroup, mongourl string, mongoDatabase string, permV2Url string) (hostport string, containerip string, err error) {
 	log.Println("start connectionlog")
 	c, err := testcontainers.GenericContainer(ctx, testcontainers.GenericContainerRequest{
 		ContainerRequest: testcontainers.ContainerRequest{
@@ -43,10 +46,6 @@ func Connectionlog(ctx context.Context, wg *sync.WaitGroup, mongourl string, mon
 				"MONGO_URL":          mongourl,
 				"MONGO_TABLE":        mongoDatabase,
 				"MONGO_DATABASE":     mongoDatabase,
-				"INFLUXDB_URL":       influxurl,
-				"INFLUXDB_TIMEOUT":   "3",
-				"INFLUXDB_USER":      "user",
-				"INFLUXDB_PW":        "pw",
 				"PERMISSIONS_V2_URL": permV2Url,
 			},
 			AlwaysPullImage: true,
@@ -89,23 +88,25 @@ func Connectionlog(ctx context.Context, wg *sync.WaitGroup, mongourl string, mon
 	return hostport, containerip, err
 }
 
-func Influxdb(ctx context.Context, wg *sync.WaitGroup) (hostport string, containerip string, err error) {
-	log.Println("start connectionlog influx")
+const (
+	// PostgresDb, PostgresUser and PostgresPw are what the Timescale fixture provisions for the worker.
+	PostgresDb   = "connectionlog"
+	PostgresUser = "connectionlog"
+	PostgresPw   = "pw"
+)
+
+// Timescale starts the image of the production serving layer and provisions what the worker expects to find:
+// the role connectionlog, the database connectionlog owned by it and the timescaledb extension in it.
+// The worker creates its tables itself.
+func Timescale(ctx context.Context, wg *sync.WaitGroup) (hostport string, containerip string, err error) {
+	log.Println("start connectionlog timescale")
 	c, err := testcontainers.GenericContainer(ctx, testcontainers.GenericContainerRequest{
 		ContainerRequest: testcontainers.ContainerRequest{
-			Image:        "influxdb:1.6.3",
-			ExposedPorts: []string{"8086/tcp"},
-			// with INFLUXDB_DB set, the entrypoint first runs a temporary server bound to the container's localhost to
-			// create the database and then restarts it; the listening port alone is already open during that first run
-			WaitingFor: wait.ForAll(
-				wait.ForListeningPort("8086/tcp"),
-				wait.ForHTTP("/ping").WithPort("8086/tcp").WithStatusCodeMatcher(func(status int) bool { return status == 204 }),
-			),
+			Image:        "timescale/timescaledb-ha:pg18.6-ts2.29.2",
+			ExposedPorts: []string{"5432/tcp"},
+			WaitingFor:   wait.ForListeningPort("5432/tcp"),
 			Env: map[string]string{
-				"INFLUXDB_DB":             "connectionlog",
-				"INFLUXDB_ADMIN_ENABLED":  "true",
-				"INFLUXDB_ADMIN_USER":     "user",
-				"INFLUXDB_ADMIN_PASSWORD": "pw",
+				"POSTGRES_PASSWORD": "superuser-pw",
 			},
 		},
 		Started: true,
@@ -118,18 +119,75 @@ func Influxdb(ctx context.Context, wg *sync.WaitGroup) (hostport string, contain
 	go func() {
 		defer wg.Done()
 		<-ctx.Done()
-		log.Println("DEBUG: remove container connectionlog influx", c.Terminate(context.Background()))
+		log.Println("DEBUG: remove container connectionlog timescale", c.Terminate(context.Background()))
 	}()
+
+	// the port is open during the entrypoint's temporary init run already, so retry until the final server answers
+	psql := func(database string, statement string) (string, error) {
+		code, reader, err := c.Exec(ctx, []string{"psql", "-U", "postgres", "-d", database, "-v", "ON_ERROR_STOP=1", "-tA", "-c", statement})
+		if err != nil {
+			return "", err
+		}
+		out, _ := io.ReadAll(reader)
+		if code != 0 {
+			return string(out), fmt.Errorf("psql exited with %d: %s", code, out)
+		}
+		return string(out), nil
+	}
+	deadline := time.Now().Add(120 * time.Second)
+	for {
+		_, err = psql("postgres", "SELECT 1")
+		if err == nil {
+			break
+		}
+		if time.Now().After(deadline) {
+			return "", "", fmt.Errorf("timescale does not accept connections: %w", err)
+		}
+		time.Sleep(500 * time.Millisecond)
+	}
+	for _, step := range []struct{ database, statement string }{
+		{"postgres", "CREATE ROLE " + PostgresUser + " LOGIN PASSWORD '" + PostgresPw + "'"},
+		{"postgres", "CREATE DATABASE " + PostgresDb + " OWNER " + PostgresUser},
+		{PostgresDb, "CREATE EXTENSION IF NOT EXISTS timescaledb"},
+	} {
+		if _, err = psql(step.database, step.statement); err != nil {
+			return "", "", err
+		}
+	}
 
 	containerip, err = c.ContainerIP(ctx)
 	if err != nil {
 		return "", "", err
 	}
-	temp, err := c.MappedPort(ctx, "8086/tcp")
+	temp, err := c.MappedPort(ctx, "5432/tcp")
 	if err != nil {
 		return "", "", err
 	}
 	hostport = temp.Port()
 
 	return hostport, containerip, err
+}
+
+// SetPostgres points the config at a Timescale container; host and port are either the container's IP and 5432
+// or localhost and the mapped port.
+func SetPostgres(conf *config.Config, host string, port string) error {
+	p, err := strconv.ParseInt(port, 10, 64)
+	if err != nil {
+		return err
+	}
+	conf.PostgresHost = host
+	conf.PostgresPort = p
+	conf.PostgresUser = PostgresUser
+	conf.PostgresPw = PostgresPw
+	conf.PostgresDb = PostgresDb
+	return nil
+}
+
+// StartTimescale starts a container and points the config at it through its mapped host port.
+func StartTimescale(ctx context.Context, wg *sync.WaitGroup, conf *config.Config) error {
+	port, _, err := Timescale(ctx, wg)
+	if err != nil {
+		return err
+	}
+	return SetPostgres(conf, "localhost", port)
 }

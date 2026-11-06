@@ -20,23 +20,21 @@ import (
 	"context"
 	"maps"
 	"slices"
-	"sync"
 	"time"
 
 	"github.com/SENERGY-Platform/connection-log-worker/lib/config"
 	"github.com/SENERGY-Platform/connection-log-worker/lib/model"
 	devicerepo "github.com/SENERGY-Platform/device-repository/v2/lib/client"
-	"github.com/influxdata/influxdb/client/v2"
+	"github.com/jackc/pgx/v5/pgxpool"
 	"go.mongodb.org/mongo-driver/mongo"
 )
 
 type Controller struct {
-	config           config.Config
-	mongo            *mongo.Client
-	influxdbInstance client.Client
-	influxdbOnce     sync.Once
-	roundTime        time.Duration
-	deviceRepo       devicerepo.Interface
+	config     config.Config
+	mongo      *mongo.Client
+	db         *pgxpool.Pool
+	roundTime  time.Duration
+	deviceRepo devicerepo.Interface
 
 	hubOfflineEnabled bool
 	hubOfflineDelay   time.Duration
@@ -54,7 +52,7 @@ type Controller struct {
 	hubModuleOutdatedAge     time.Duration
 }
 
-// New connects to MongoDB and fails when the authenticated startup check or the index creation fails;
+// New connects to MongoDB and to the history database, creates the history tables and fails when the authenticated startup check or the index creation fails;
 // the client is disconnected when ctx is done.
 func New(ctx context.Context, config config.Config) (*Controller, error) {
 	roundTime, err := time.ParseDuration(config.RoundTime)
@@ -96,9 +94,22 @@ func New(ctx context.Context, config config.Config) (*Controller, error) {
 	if err != nil {
 		return nil, err
 	}
+	db, err := newPostgresPool(ctx, config)
+	if err != nil {
+		return nil, err
+	}
+	if err = ensureSchema(ctx, db); err != nil {
+		db.Close()
+		return nil, err
+	}
+	go func() {
+		<-ctx.Done()
+		db.Close()
+	}()
 	controller := &Controller{
 		config:            config,
 		mongo:             mongoClient,
+		db:                db,
 		roundTime:         roundTime,
 		deviceRepo:        devicerepo.NewClient(config.DeviceRepositoryUrl, nil),
 		hubOfflineEnabled: hubOfflineEnabled,

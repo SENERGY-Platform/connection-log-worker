@@ -59,6 +59,10 @@ func TestHubHealthMetrics(t *testing.T) {
 		t.Fatal(err)
 	}
 	conf.MongoUrl = "mongodb://localhost:" + mongoPort
+	// the controller creates the history tables on start
+	if err = server.StartTimescale(ctx, wg, &conf); err != nil {
+		t.Fatal(err)
+	}
 
 	// the controller creates the unique index on hub_id
 	control, err := controller.New(ctx, conf)

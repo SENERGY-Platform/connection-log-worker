@@ -26,7 +26,6 @@ import (
 	"github.com/SENERGY-Platform/connection-log-worker/lib/source/util"
 	"github.com/SENERGY-Platform/connection-log-worker/test/helper"
 	"github.com/SENERGY-Platform/connection-log-worker/test/server"
-	"github.com/influxdata/influxdb/client/v2"
 	"github.com/segmentio/kafka-go"
 	"log"
 	"reflect"
@@ -89,7 +88,7 @@ func testHubStateAfterDelete(config config.Config, connectionlog string, initial
 		time.Sleep(10 * time.Second)
 
 		t.Run("check hub log", func(t *testing.T) {
-			checkHubLog(t, connectionlog, hubId, state, count)
+			checkHubLog(t, config, connectionlog, hubId, state, count)
 		})
 
 		t.Run("send hub delete", func(t *testing.T) {
@@ -99,7 +98,7 @@ func testHubStateAfterDelete(config config.Config, connectionlog string, initial
 		time.Sleep(10 * time.Second)
 
 		t.Run("check hub log", func(t *testing.T) {
-			checkHubLogs(t, connectionlog, []string{hubId}, map[string]bool{}, 0)
+			checkHubLogs(t, config, connectionlog, []string{hubId}, map[string]bool{}, 0)
 		})
 	}
 }
@@ -138,36 +137,13 @@ func sendHubDelete(t *testing.T, config config.Config, id string) {
 	}
 }
 
-func checkHubLogs(t *testing.T, connectionlogUrl string, ids []string, expectedStates map[string]bool, count int) {
+func checkHubLogs(t *testing.T, conf config.Config, connectionlogUrl string, ids []string, expectedStates map[string]bool, count int) {
 	t.Run("check hub state", func(t *testing.T) {
 		checkHubStates(t, connectionlogUrl, ids, expectedStates)
 	})
 	t.Run("check hub history", func(t *testing.T) {
-		checkHubHistories(t, connectionlogUrl, ids, count)
+		checkHistoryRows(t, conf, "gateway", ids, count)
 	})
-}
-
-func checkHubHistories(t *testing.T, connectionlogUrl string, ids []string, count int) {
-	result := []client.Result{}
-	err := helper.AdminPost(connectionlogUrl+"/intern/history/gateway/1h", ids, &result)
-	if err != nil {
-		t.Fatal(err)
-	}
-	if len(result) != 1 {
-		t.Fatal(len(result), result)
-	}
-	if result[0].Err != "" {
-		t.Fatal(result[0].Err)
-	}
-	if len(result[0].Series) != 1 {
-		if count != 0 {
-			t.Fatal(len(result[0].Series), result[0].Series)
-		}
-		return
-	}
-	if len(result[0].Series[0].Values) != count {
-		t.Fatal(len(result[0].Series[0].Values), result[0].Series[0].Values)
-	}
 }
 
 func checkHubStates(t *testing.T, connectionlogUrl string, ids []string, expected map[string]bool) {

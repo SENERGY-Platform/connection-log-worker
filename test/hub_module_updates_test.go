@@ -42,8 +42,8 @@ const (
 	hubHealthMissingMetric   = "connectionlog_worker_hub_health_missing"
 )
 
-// The module tests need no Kafka: reports are handed to the controller directly. InfluxDB is only there
-// because deleting a hub also clears its history. HubModuleOutdatedAge is one
+// The module tests need no Kafka: reports are handed to the controller directly. TimescaleDB is only there
+// because the controller creates the history tables and deleting a hub also clears its history. HubModuleOutdatedAge is one
 // hour, so a report received two hours ago is outdated at once and one received now is not.
 func TestHubModuleUpdates(t *testing.T) {
 	wg := &sync.WaitGroup{}
@@ -66,15 +66,10 @@ func TestHubModuleUpdates(t *testing.T) {
 		t.Fatal(err)
 	}
 	conf.MongoUrl = "mongodb://localhost:" + mongoPort
-	influxPort, _, err := server.Influxdb(ctx, wg)
-	if err != nil {
+	// DELETE also removes the hub's connection history from TimescaleDB
+	if err = server.StartTimescale(ctx, wg, &conf); err != nil {
 		t.Fatal(err)
 	}
-	conf.InfluxdbUrl = "http://localhost:" + influxPort
-	conf.InfluxdbDb = "connectionlog"
-	conf.InfluxdbUser = "user"
-	conf.InfluxdbPw = "pw"
-	conf.InfluxdbTimeout = 3
 
 	notifier := &fakeNotifier{}
 	var failSending atomic.Bool
@@ -158,7 +153,7 @@ func TestHubModuleUpdates(t *testing.T) {
 		return result
 	}
 	stay := func() { time.Sleep(2 * time.Second) }
-	// InfluxDB accepts connections a moment after its port is open
+	// the history database may refuse connections for a moment after its port is open
 	retry := func(t *testing.T, f func() error) {
 		t.Helper()
 		var err error

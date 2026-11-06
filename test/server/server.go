@@ -41,7 +41,7 @@ func New(ctx context.Context, wg *sync.WaitGroup, defaults config.Config) (confi
 	}
 	permissionsV2Url := "http://" + permV2Ip + ":8080"
 
-	_, connectionlogip, err = Connectionlog(ctx, wg, config.MongoUrl, config.MongoDatabase, config.InfluxdbUrl, permissionsV2Url)
+	_, connectionlogip, err = Connectionlog(ctx, wg, config.MongoUrl, config.MongoDatabase, permissionsV2Url)
 	if err != nil {
 		log.Println("ERROR:", err)
 		debug.PrintStack()
@@ -72,17 +72,15 @@ func NewPartial(ctx context.Context, wg *sync.WaitGroup, defaults config.Config)
 		return config, err
 	}
 
-	_, influxip, err := Influxdb(ctx, wg)
+	_, postgresip, err := Timescale(ctx, wg)
 	if err != nil {
 		log.Println("ERROR:", err)
 		debug.PrintStack()
 		return config, err
 	}
-	config.InfluxdbUrl = "http://" + influxip + ":8086"
-	config.InfluxdbDb = "connectionlog"
-	config.InfluxdbUser = "user"
-	config.InfluxdbPw = "pw"
-	config.InfluxdbTimeout = 3
+	if err = SetPostgres(&config, postgresip, "5432"); err != nil {
+		return config, err
+	}
 
 	_, mongoIp, err := MongoDB(ctx, wg)
 	if err != nil {

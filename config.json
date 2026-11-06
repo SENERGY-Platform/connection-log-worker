@@ -27,11 +27,11 @@
   "HubTopic": "hubs",
   "HubHealthTopic": "-",
 
-  "InfluxdbUrl": "http://influxdb:8086",
-  "InfluxdbDb": "connectionlog",
-  "InfluxdbUser": "",
-  "InfluxdbPw": "",
-  "InfluxdbTimeout": 3,
+  "PostgresHost": "timescale",
+  "PostgresPort": 5432,
+  "PostgresUser": "connectionlog",
+  "PostgresPw": "",
+  "PostgresDb": "connectionlog",
 
   "KafkaUrl": "kafka:9092",
   "KafkaMaxMessages": 500,

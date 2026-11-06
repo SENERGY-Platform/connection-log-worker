@@ -8,7 +8,7 @@ require (
 	github.com/SENERGY-Platform/go-service-base/struct-logger v0.8.0
 	github.com/SENERGY-Platform/models/go v0.0.0-20260910124809-95949e15e3d4
 	github.com/google/uuid v1.6.0
-	github.com/influxdata/influxdb v1.11.4
+	github.com/jackc/pgx/v5 v5.11.0
 	github.com/prometheus/client_golang v1.25.0
 	github.com/segmentio/kafka-go v0.4.50
 	github.com/testcontainers/testcontainers-go v0.40.0
@@ -70,6 +70,9 @@ require (
 	github.com/golang-jwt/jwt v3.2.2+incompatible // indirect
 	github.com/golang/snappy v1.0.0 // indirect
 	github.com/grpc-ecosystem/grpc-gateway/v2 v2.29.0 // indirect
+	github.com/jackc/pgpassfile v1.0.0 // indirect
+	github.com/jackc/pgservicefile v0.0.0-20240606120523-5a60cdf6a761 // indirect
+	github.com/jackc/puddle/v2 v2.2.2 // indirect
 	github.com/json-iterator/go v1.1.12 // indirect
 	github.com/klauspost/compress v1.20.1 // indirect
 	github.com/klauspost/cpuid/v2 v2.3.0 // indirect

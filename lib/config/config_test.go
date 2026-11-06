@@ -266,3 +266,34 @@ func TestLoad_MetricsDefaultsAndEnvNames(t *testing.T) {
 		t.Errorf("environment variables not applied: %q, %q", got.PrometheusPort, got.HubHealthStaleAge)
 	}
 }
+
+func TestLoad_PostgresDefaultsAndEnvNames(t *testing.T) {
+	for _, k := range []string{"POSTGRES_HOST", "POSTGRES_PORT", "POSTGRES_USER", "POSTGRES_PW", "POSTGRES_DB"} {
+		t.Setenv(k, "")
+	}
+	cfg := load(t, "../../config.json")
+	if cfg.PostgresDb != "connectionlog" || cfg.PostgresUser != "connectionlog" || cfg.PostgresPort != 5432 {
+		t.Errorf("unexpected defaults: db=%q user=%q port=%d", cfg.PostgresDb, cfg.PostgresUser, cfg.PostgresPort)
+	}
+
+	t.Setenv("POSTGRES_HOST", "db.example")
+	t.Setenv("POSTGRES_PORT", "6543")
+	t.Setenv("POSTGRES_USER", "u")
+	t.Setenv("POSTGRES_PW", "secret-pw")
+	t.Setenv("POSTGRES_DB", "other")
+	var out string
+	var cfg2 Config
+	out = captureStdout(t, func() {
+		var err error
+		if cfg2, err = Load("../../config.json"); err != nil {
+			t.Error(err)
+		}
+	})
+	if cfg2.PostgresHost != "db.example" || cfg2.PostgresPort != 6543 || cfg2.PostgresUser != "u" ||
+		cfg2.PostgresPw != "secret-pw" || cfg2.PostgresDb != "other" {
+		t.Errorf("environment not applied: %+v", cfg2.masked())
+	}
+	if strings.Contains(out, "secret-pw") || strings.Contains(fmt.Sprint(cfg2), "secret-pw") {
+		t.Error("password leaked into output")
+	}
+}

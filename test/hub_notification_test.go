@@ -267,7 +267,7 @@ func testHubOfflineNotifications(t *testing.T, batchMode bool) {
 	})
 }
 
-// startHubNotificationDependencies is server.NewPartial with MongoDB and InfluxDB addressed through their
+// startHubNotificationDependencies is server.NewPartial with MongoDB and TimescaleDB addressed through their
 // mapped host ports instead of the container IPs, so that it also works where the bridge network is not routable
 // from the host (rootless Docker).
 func startHubNotificationDependencies(ctx context.Context, wg *sync.WaitGroup, defaults config.Config) (conf config.Config, err error) {
@@ -276,15 +276,9 @@ func startHubNotificationDependencies(ctx context.Context, wg *sync.WaitGroup, d
 	if err != nil {
 		return conf, err
 	}
-	influxPort, _, err := server.Influxdb(ctx, wg)
-	if err != nil {
+	if err = server.StartTimescale(ctx, wg, &conf); err != nil {
 		return conf, err
 	}
-	conf.InfluxdbUrl = "http://localhost:" + influxPort
-	conf.InfluxdbDb = "connectionlog"
-	conf.InfluxdbUser = "user"
-	conf.InfluxdbPw = "pw"
-	conf.InfluxdbTimeout = 3
 	mongoPort, _, err := server.MongoDB(ctx, wg)
 	if err != nil {
 		return conf, err

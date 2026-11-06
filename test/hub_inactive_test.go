@@ -43,16 +43,10 @@ func TestHubInactiveCommands(t *testing.T) {
 	}
 	conf.HubOfflineNotificationDelay = "-"
 	conf.HubUnhealthyNotificationDelay = "-"
-	// DELETE also removes the hub's connection log from InfluxDB
-	influxPort, _, err := server.Influxdb(ctx, wg)
-	if err != nil {
+	// DELETE also removes the hub's connection history from TimescaleDB
+	if err = server.StartTimescale(ctx, wg, &conf); err != nil {
 		t.Fatal(err)
 	}
-	conf.InfluxdbUrl = "http://localhost:" + influxPort
-	conf.InfluxdbDb = "connectionlog"
-	conf.InfluxdbUser = "user"
-	conf.InfluxdbPw = "pw"
-	conf.InfluxdbTimeout = 3
 	mongoPort, _, err := server.MongoDB(ctx, wg)
 	if err != nil {
 		t.Fatal(err)
