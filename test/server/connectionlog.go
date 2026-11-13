@@ -28,6 +28,7 @@ import (
 
 	"github.com/SENERGY-Platform/connection-log-worker/lib/config"
 	"github.com/testcontainers/testcontainers-go"
+	tcexec "github.com/testcontainers/testcontainers-go/exec"
 	"github.com/testcontainers/testcontainers-go/wait"
 )
 
@@ -122,9 +123,10 @@ func Timescale(ctx context.Context, wg *sync.WaitGroup) (hostport string, contai
 		log.Println("DEBUG: remove container connectionlog timescale", c.Terminate(context.Background()))
 	}()
 
-	// the port is open during the entrypoint's temporary init run already, so retry until the final server answers
+	// psql goes over TCP: the entrypoint's temporary init server listens on the socket only and shuts down afterwards,
+	// so only the final server answers here
 	psql := func(database string, statement string) (string, error) {
-		code, reader, err := c.Exec(ctx, []string{"psql", "-U", "postgres", "-d", database, "-v", "ON_ERROR_STOP=1", "-tA", "-c", statement})
+		code, reader, err := c.Exec(ctx, []string{"psql", "-h", "127.0.0.1", "-U", "postgres", "-d", database, "-v", "ON_ERROR_STOP=1", "-tA", "-c", statement}, tcexec.WithEnv([]string{"PGPASSWORD=superuser-pw"}))
 		if err != nil {
 			return "", err
 		}
