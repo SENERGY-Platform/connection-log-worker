@@ -172,17 +172,13 @@ func (this *Controller) LogHubs(logs []model.HubLog) error {
 		return err
 	}
 	newStates, newLogs := handleHubLogs(states, logs)
-	if len(newStates) > 0 {
-		if this.config.DeviceRepositoryUrl != "" && this.config.DeviceRepositoryUrl != "-" {
-			statesMap := make(map[string]bool)
-			for _, state := range newStates {
-				statesMap[state.Id] = state.Connected
-			}
-			err, _ = this.deviceRepo.SetHubConnectionStates(devicerepo.InternalAdminToken, statesMap)
-			if err != nil {
-				return err
-			}
+	if repoStates := latestHubStates(logs); len(repoStates) > 0 && this.config.DeviceRepositoryUrl != "" && this.config.DeviceRepositoryUrl != "-" {
+		err, _ = this.deviceRepo.SetHubConnectionStates(devicerepo.InternalAdminToken, repoStates)
+		if err != nil {
+			return err
 		}
+	}
+	if len(newStates) > 0 {
 		err = this.setHubStates(newStates)
 		if err != nil {
 			return err
@@ -239,17 +235,13 @@ func (this *Controller) LogDevices(logs []model.DeviceLog) error {
 		return err
 	}
 	newStates, newLogs := handleDeviceLogs(states, logs)
-	if len(newStates) > 0 {
-		if this.config.DeviceRepositoryUrl != "" && this.config.DeviceRepositoryUrl != "-" {
-			statesMap := make(map[string]bool)
-			for _, state := range newStates {
-				statesMap[state.Id] = state.Connected
-			}
-			err, _ = this.deviceRepo.SetDeviceConnectionStates(devicerepo.InternalAdminToken, statesMap)
-			if err != nil {
-				return err
-			}
+	if repoStates := latestDeviceStates(logs); len(repoStates) > 0 && this.config.DeviceRepositoryUrl != "" && this.config.DeviceRepositoryUrl != "-" {
+		err, _ = this.deviceRepo.SetDeviceConnectionStates(devicerepo.InternalAdminToken, repoStates)
+		if err != nil {
+			return err
 		}
+	}
+	if len(newStates) > 0 {
 		err = this.setDeviceStates(newStates)
 		if err != nil {
 			return err
@@ -391,6 +383,25 @@ func handleConnectionLogs[S any, L any](
 		newLogs = append(newLogs, lgs...)
 	}
 	return newStates, newLogs
+}
+
+func latestHubStates(logs []model.HubLog) map[string]bool {
+	return latestConnectionStates(logs, func(l model.HubLog) string { return l.Id }, func(l model.HubLog) bool { return l.Connected })
+}
+
+func latestDeviceStates(logs []model.DeviceLog) map[string]bool {
+	return latestConnectionStates(logs, func(l model.DeviceLog) string { return l.Id }, func(l model.DeviceLog) bool { return l.Connected })
+}
+
+// latestConnectionStates returns the last reported state per id of a chronological batch. The device-repository gets
+// these regardless of the worker's own stored state: a correction from connection-check arrives exactly when the
+// device-repository is wrong, often while the worker already stores the right state.
+func latestConnectionStates[L any](logs []L, getLogId func(L) string, getLogConnection func(L) bool) map[string]bool {
+	result := make(map[string]bool, len(logs))
+	for _, log := range logs {
+		result[getLogId(log)] = getLogConnection(log)
+	}
+	return result
 }
 
 func getUniqueStrings[T any](sl []T, valFunc func(i T) string) []string {
