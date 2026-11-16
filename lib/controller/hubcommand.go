@@ -21,7 +21,7 @@ import (
 )
 
 func (this *Controller) UpdateHub(command model.HubCommand) error {
-	err := this.updateHubInactive([]model.HubCommand{command})
+	err := this.updateHubFlags([]model.HubCommand{command})
 	if err != nil {
 		return err
 	}
@@ -48,7 +48,7 @@ func (this *Controller) UpdateHub(command model.HubCommand) error {
 }
 
 func (this *Controller) UpdateHubs(commands []model.HubCommand) error {
-	err := this.updateHubInactive(commands)
+	err := this.updateHubFlags(commands)
 	if err != nil {
 		return err
 	}

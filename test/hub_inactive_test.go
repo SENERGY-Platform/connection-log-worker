@@ -172,6 +172,64 @@ func TestHubInactiveCommands(t *testing.T) {
 		expectIds(t, "stays")
 	})
 
+	t.Run("ignore-module-updates is stored in its own collection", func(t *testing.T) {
+		reset(t)
+		ignoring := mongoClient.Database(conf.MongoDatabase).Collection(conf.HubIgnoreModuleUpdatesCollection)
+		if _, err := ignoring.DeleteMany(ctx, bson.M{}); err != nil {
+			t.Fatal(err)
+		}
+		ignoreIds := func(t *testing.T) []string {
+			t.Helper()
+			cursor, err := ignoring.Find(ctx, bson.M{})
+			if err != nil {
+				t.Fatal(err)
+			}
+			var docs []struct {
+				HubId string `bson:"hub_id"`
+			}
+			if err = cursor.All(ctx, &docs); err != nil {
+				t.Fatal(err)
+			}
+			ids := []string{}
+			for _, doc := range docs {
+				ids = append(ids, doc.HubId)
+			}
+			sort.Strings(ids)
+			return ids
+		}
+		ignore := models.Attribute{Key: "ignore-module-updates", Value: " True ", Origin: "web-ui"}
+		err := control.UpdateHubs([]model.HubCommand{
+			put("ignored", ignore),
+			put("both", flag, ignore),
+			put("only-inactive", flag),
+			put("flipped", ignore),
+			put("flipped", models.Attribute{Key: "ignore-module-updates", Value: "false"}),
+			put("deleted", ignore),
+			del("deleted"),
+		})
+		if err != nil {
+			t.Fatal(err)
+		}
+		if got := ignoreIds(t); len(got) != 2 || got[0] != "both" || got[1] != "ignored" {
+			t.Fatalf("expected ignoring hubs [both ignored], got %v", got)
+		}
+		expectIds(t, "both", "only-inactive")
+
+		if err = control.UpdateHub(put("ignored")); err != nil {
+			t.Fatal(err)
+		}
+		if got := ignoreIds(t); len(got) != 1 || got[0] != "both" {
+			t.Fatalf("expected ignoring hubs [both], got %v", got)
+		}
+		if err = control.UpdateHub(put("both", ignore)); err != nil {
+			t.Fatal(err)
+		}
+		if got := ignoreIds(t); len(got) != 1 || got[0] != "both" {
+			t.Fatalf("storing again must not add a document, got %v", got)
+		}
+		expectIds(t, "only-inactive")
+	})
+
 	t.Run("batch without commands changes nothing", func(t *testing.T) {
 		reset(t)
 		if err := control.UpdateHub(put("h1", flag)); err != nil {

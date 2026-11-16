@@ -145,7 +145,7 @@ func (this *hubHealthCollector) Collect(ch chan<- prometheus.Metric) {
 		ch <- prometheus.MustNewConstMetric(hubHealthReportsDesc, prometheus.GaugeValue, float64(count), label)
 	}
 	for hubId, count := range data.outdatedModules {
-		if !inactive[hubId] && count > 0 {
+		if !inactive[hubId] && !data.ignoreModuleUpdates[hubId] && count > 0 {
 			ch <- prometheus.MustNewConstMetric(hubModulesOutdatedDesc, prometheus.GaugeValue, float64(count), hubId)
 		}
 	}
@@ -160,13 +160,15 @@ func (this *hubHealthCollector) Collect(ch chan<- prometheus.Metric) {
 type hubHealthMetricData struct {
 	reports  []HubHealth
 	inactive map[string]bool
+	// ignoreModuleUpdates are the hubs that get no outdated-module series.
+	ignoreModuleUpdates map[string]bool
 	// outdatedModules counts the tracked updates per hub that are pending for longer than the outdated age.
 	outdatedModules map[string]int
 	// healthMissing are the hubs online for longer than the stale age without a stored report.
 	healthMissing []string
 }
 
-// getHubHealthMetricData loads the health reports, the inactive hub ids, the outdated module counts and the
+// getHubHealthMetricData loads the health reports, the inactive and module-update-ignoring hub ids, the outdated module counts and the
 // online hubs of one scrape within one timeout. The documents contain only the fields the metrics need.
 func (this *Controller) getHubHealthMetricData() (data hubHealthMetricData, err error) {
 	ctx, cancel := context.WithTimeout(context.Background(), hubHealthMetricsTimeout)
@@ -181,6 +183,10 @@ func (this *Controller) getHubHealthMetricData() (data hubHealthMetricData, err 
 		return data, err
 	}
 	data.inactive, err = this.getHubInactiveIds(ctx)
+	if err != nil {
+		return data, err
+	}
+	data.ignoreModuleUpdates, err = this.getHubIgnoreModuleUpdatesIds(ctx)
 	if err != nil {
 		return data, err
 	}

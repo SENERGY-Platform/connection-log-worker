@@ -45,3 +45,28 @@ func TestIsInactive(t *testing.T) {
 		})
 	}
 }
+
+func TestIgnoresModuleUpdates(t *testing.T) {
+	attr := func(key string, value string) []models.Attribute {
+		return []models.Attribute{{Key: "other", Value: "x"}, {Key: key, Value: value, Origin: "web-ui"}}
+	}
+	for name, c := range map[string]struct {
+		attributes []models.Attribute
+		expected   bool
+	}{
+		"no attributes":         {nil, false},
+		"true":                  {attr("ignore-module-updates", "true"), true},
+		"upper case and spaces": {attr("ignore-module-updates", " True "), true},
+		"false":                 {attr("ignore-module-updates", "false"), false},
+		"empty value":           {attr("ignore-module-updates", ""), false},
+		"other value":           {attr("ignore-module-updates", "yes"), false},
+		"inactive flag":         {attr("inactive", "true"), false},
+		"key is case sensitive": {attr("Ignore-Module-Updates", "true"), false},
+	} {
+		t.Run(name, func(t *testing.T) {
+			if got := ignoresModuleUpdates(c.attributes); got != c.expected {
+				t.Errorf("expected %v, got %v", c.expected, got)
+			}
+		})
+	}
+}

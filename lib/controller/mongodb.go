@@ -131,6 +131,7 @@ func ensureMongoIndexes(ctx context.Context, client *mongo.Client, conf config.C
 		{conf.HubUnhealthyNotificationInfoCollection, []string{"hub_id"}, false},
 		// unique, so that concurrent upserts of the same hub cannot add a second document
 		{conf.HubInactiveCollection, []string{"hub_id"}, true},
+		{conf.HubIgnoreModuleUpdatesCollection, []string{"hub_id"}, true},
 		// unique, so that the upsert of a pending update cannot add a second document for the same hub and module
 		{conf.HubModuleUpdateInfoCollection, []string{"hub_id", "module_id"}, true},
 	} {

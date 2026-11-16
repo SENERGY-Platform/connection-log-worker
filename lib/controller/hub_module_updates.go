@@ -216,6 +216,11 @@ func (this *Controller) notifyOutdatedModuleHub(ctx context.Context, hubId strin
 		logger.Debug("hub is inactive, skip module update notification", "hub-id", hubId)
 		return
 	}
+	if ignoresModuleUpdates(hub.Attributes) {
+		// the claim stays, so the pending period counts as notified and is not retried
+		logger.Debug("hub ignores module updates, skip module update notification", "hub-id", hubId)
+		return
+	}
 	if hub.OwnerId == "" {
 		logger.Debug("hub has no owner, skip module update notification", "hub-id", hubId)
 		return

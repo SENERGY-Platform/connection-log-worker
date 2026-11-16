@@ -34,7 +34,8 @@ One document per hub in `HUB_HEALTH_COLLECTION` (`gatewayhealth`):
 `received`. A report only replaces the stored one if its `received` is not
 older, so out-of-order delivery cannot overwrite a newer state. In batch mode
 only the newest message per hub is written. Inactive hubs are kept in
-`HUB_INACTIVE_COLLECTION` (`hub_inactive`), one document `{hub_id}` each.
+`HUB_INACTIVE_COLLECTION` (`hub_inactive`), one document `{hub_id}` each. Hubs that ignore module updates are kept in
+`HUB_IGNORE_MODULE_UPDATES_COLLECTION` (`hub_ignore_module_updates`), same shape.
 
 ## Unhealthy notification
 
@@ -81,16 +82,17 @@ documents with `notified=false` and `pending_since` older than
 (`notified` false to true on exactly the selected `pending_since`, so one worker
 wins), reads the claimed documents and the hub again and sends one notification
 for all claimed modules: topic `mgw`, title "Network Modules Outdated", the module
-list cut at 1000 characters. Unknown hub: tracking is removed. Inactive hub or hub
-without owner: nothing is sent, the claim stays. Any other read error and a failed
+list cut at 1000 characters. Unknown hub: tracking is removed. Inactive hub, hub
+that ignores module updates or hub without owner: nothing is sent, the claim stays. Any other read error and a failed
 send release the claim for exactly the claimed documents. Deleting a hub removes its
 documents.
 
 ## Metrics
 
 With `PROMETHEUS_PORT` set, `/metrics` serves five gauges, read from
-`gatewayhealth`, `HUB_MODULE_UPDATE_INFO_COLLECTION`, the hub states and
-`HUB_INACTIVE_COLLECTION` on every scrape:
+`gatewayhealth`, `HUB_MODULE_UPDATE_INFO_COLLECTION`, the hub states,
+`HUB_INACTIVE_COLLECTION` and `HUB_IGNORE_MODULE_UPDATES_COLLECTION` on every
+scrape:
 
 - `connectionlog_worker_hub_health_state{hub_id}`: the stored state, only for
   reports received within `HUB_HEALTH_STALE_AGE` (15m, as in connection-log).
@@ -107,7 +109,8 @@ With `PROMETHEUS_PORT` set, `/metrics` serves five gauges, read from
 
 - `connectionlog_worker_hub_modules_outdated{hub_id}`: number of modules whose
   update has been pending for longer than `HUB_MODULE_OUTDATED_AGE`, only for hubs
-  with at least one. Independent of `notified`.
+  with at least one, not for hubs that ignore module updates. Independent of
+  `notified`.
 - `connectionlog_worker_hub_health_missing{hub_id}`: 1 for hubs that are online
   in `gatewaystate` for longer than `HUB_HEALTH_STALE_AGE` and have no stored
   report, as with a device-cloud-connector before 0.8.0. Only exported if the
@@ -135,6 +138,18 @@ neither the offline nor the unhealthy notification: the notification loops read
 the hub from device-repository before sending, and for an inactive hub they
 skip it and keep the tracking as notified, so the same episode is not notified
 later either. Health reports of inactive hubs are still stored.
+
+## Hubs that ignore module updates
+
+A hub whose attribute `ignore-module-updates` has the value `true` (trimmed, case
+insensitive) gets no `hub_modules_outdated` series and no "Network Modules
+Outdated" notification; the claim stays, so the pending period counts as notified.
+Health state, stale state, `hub_health_missing` and the unhealthy notification are
+unaffected, and the module tracking continues: removing the attribute brings the
+alert back immediately for modules pending longer than `HUB_MODULE_OUTDATED_AGE`.
+
+The worker maintains `HUB_IGNORE_MODULE_UPDATES_COLLECTION` from the `hubs` topic
+like the inactive flag (unique index on `hub_id`, last PUT or DELETE per hub wins).
 
 ## Configuration
 

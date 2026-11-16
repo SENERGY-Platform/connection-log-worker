@@ -48,6 +48,9 @@ type Config struct {
 	// HubInactiveCollection holds one document {hub_id} per hub whose attribute "inactive" is "true";
 	// such hubs raise no metrics series and no owner notifications.
 	HubInactiveCollection string
+	// HubIgnoreModuleUpdatesCollection holds one document {hub_id} per hub whose attribute "ignore-module-updates"
+	// is "true"; such hubs raise no outdated-module series and no outdated-module notification.
+	HubIgnoreModuleUpdatesCollection string
 	// HubModuleUpdateInfoCollection holds one document per hub and module with a pending update.
 	HubModuleUpdateInfoCollection string
 

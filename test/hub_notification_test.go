@@ -339,7 +339,8 @@ func hubReadCount(id string) int {
 }
 
 // fakeHubRepository answers hub reads, with 404 for ids starting with "unknown" and the attribute inactive=true
-// for ids starting with "inactive", and accepts everything else.
+// for ids starting with "inactive", ignore-module-updates=true for ids starting with "ignore-modules", and
+// accepts everything else.
 func fakeHubRepository(w http.ResponseWriter, r *http.Request) {
 	id, isHubRead := strings.CutPrefix(r.URL.Path, "/hubs/")
 	if r.Method != http.MethodGet || !isHubRead || strings.Contains(id, "/") {
@@ -356,6 +357,9 @@ func fakeHubRepository(w http.ResponseWriter, r *http.Request) {
 	hub := models.Hub{Id: id, Name: "name of " + id, OwnerId: hubOfflineTestOwner}
 	if strings.HasPrefix(id, "inactive") {
 		hub.Attributes = []models.Attribute{{Key: "inactive", Value: "true", Origin: "web-ui"}}
+	}
+	if strings.HasPrefix(id, "ignore-modules") {
+		hub.Attributes = []models.Attribute{{Key: "ignore-module-updates", Value: "true", Origin: "web-ui"}}
 	}
 	json.NewEncoder(w).Encode(hub)
 }

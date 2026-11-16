@@ -78,6 +78,7 @@ func TestHubHealthMetrics(t *testing.T) {
 	defer mongoClient.Disconnect(context.Background())
 	healths := mongoClient.Database(conf.MongoDatabase).Collection(conf.HubHealthCollection)
 	inactive := mongoClient.Database(conf.MongoDatabase).Collection(conf.HubInactiveCollection)
+	ignoring := mongoClient.Database(conf.MongoDatabase).Collection(conf.HubIgnoreModuleUpdatesCollection)
 	moduleUpdates := mongoClient.Database(conf.MongoDatabase).Collection(conf.HubModuleUpdateInfoCollection)
 	hubStates := mongoClient.Database(conf.MongoDatabase).Collection(conf.HubStateCollection)
 
@@ -86,7 +87,7 @@ func TestHubHealthMetrics(t *testing.T) {
 		if _, err := healths.DeleteMany(ctx, bson.M{}); err != nil {
 			t.Fatal(err)
 		}
-		for _, c := range []*mongo.Collection{inactive, moduleUpdates, hubStates} {
+		for _, c := range []*mongo.Collection{inactive, ignoring, moduleUpdates, hubStates} {
 			if _, err := c.DeleteMany(ctx, bson.M{}); err != nil {
 				t.Fatal(err)
 			}
@@ -174,6 +175,36 @@ connectionlog_worker_hub_health_missing{hub_id="hub-silent"} 1
 `
 		if err := testutil.CollectAndCompare(collector, strings.NewReader(expected), hubModulesOutdatedMetric, hubHealthMissingMetric); err != nil {
 			t.Error(err)
+		}
+	})
+
+	t.Run("a hub ignoring module updates only loses the outdated modules series", func(t *testing.T) {
+		reset(t, report("hub-ignoring", 2, time.Minute), report("hub-other", 2, time.Minute))
+		pending := func(hub string) any {
+			return bson.M{"hub_id": hub, "module_id": "a", "name": "a", "version": "v1", "next_version": "v2", "pending_since": time.Now().Add(-200 * time.Hour).Unix(), "notified": false}
+		}
+		if _, err := moduleUpdates.InsertMany(ctx, []any{pending("hub-ignoring"), pending("hub-other")}); err != nil {
+			t.Fatal(err)
+		}
+		if _, err := ignoring.InsertOne(ctx, bson.M{"hub_id": "hub-ignoring"}); err != nil {
+			t.Fatal(err)
+		}
+		expected := `
+# HELP connectionlog_worker_hub_modules_outdated number of modules per hub whose update has been pending for longer than HubModuleOutdatedAge; only hubs with at least one, not of inactive hubs
+# TYPE connectionlog_worker_hub_modules_outdated gauge
+connectionlog_worker_hub_modules_outdated{hub_id="hub-other"} 1
+`
+		if err := testutil.CollectAndCompare(collector, strings.NewReader(expected), hubModulesOutdatedMetric); err != nil {
+			t.Error(err)
+		}
+		if n := testutil.CollectAndCount(collector, hubHealthStateMetric); n != 2 {
+			t.Errorf("expected the health series of both hubs, got %d", n)
+		}
+		if _, err := ignoring.DeleteMany(ctx, bson.M{}); err != nil {
+			t.Fatal(err)
+		}
+		if n := testutil.CollectAndCount(collector, hubModulesOutdatedMetric); n != 2 {
+			t.Errorf("expected the series back once the flag is removed, got %d", n)
 		}
 	})
 

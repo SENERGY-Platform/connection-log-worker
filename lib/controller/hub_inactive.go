@@ -37,8 +37,13 @@ type HubInactive struct {
 }
 
 func isInactive(attributes []models.Attribute) bool {
+	return hasTrueAttribute(attributes, hubInactiveAttributeKey)
+}
+
+// hasTrueAttribute reports whether the attribute key has the value "true", trimmed and case-insensitive.
+func hasTrueAttribute(attributes []models.Attribute, key string) bool {
 	for _, attribute := range attributes {
-		if attribute.Key == hubInactiveAttributeKey && strings.EqualFold(strings.TrimSpace(attribute.Value), "true") {
+		if attribute.Key == key && strings.EqualFold(strings.TrimSpace(attribute.Value), "true") {
 			return true
 		}
 	}
@@ -49,8 +54,27 @@ func (this *Controller) getHubInactiveCollection() *mongo.Collection {
 	return this.mongo.Database(this.config.MongoDatabase).Collection(this.config.HubInactiveCollection)
 }
 
-// updateHubInactive applies the last PUT or DELETE per hub: inactive PUTs store the flag, everything else removes it.
+// updateHubFlags maintains the flag collections of the hub attributes from the hub commands.
+func (this *Controller) updateHubFlags(commands []model.HubCommand) error {
+	err := this.updateHubInactive(commands)
+	if err != nil {
+		return err
+	}
+	return this.updateHubIgnoreModuleUpdates(commands)
+}
+
 func (this *Controller) updateHubInactive(commands []model.HubCommand) error {
+	return updateHubFlag(this.getHubInactiveCollection(), commands, isInactive)
+}
+
+// getHubInactiveIds loads the ids of all inactive hubs within ctx.
+func (this *Controller) getHubInactiveIds(ctx context.Context) (map[string]bool, error) {
+	return getHubFlagIds(ctx, this.getHubInactiveCollection())
+}
+
+// updateHubFlag applies the last PUT or DELETE per hub: a PUT whose hub matches flagged stores the flag
+// document {hub_id}, everything else removes it.
+func updateHubFlag(collection *mongo.Collection, commands []model.HubCommand, flagged func([]models.Attribute) bool) error {
 	last := map[string]model.HubCommand{}
 	var order []string
 	for _, command := range commands {
@@ -65,7 +89,7 @@ func (this *Controller) updateHubInactive(commands []model.HubCommand) error {
 	var writes []mongo.WriteModel
 	for _, id := range order {
 		command := last[id]
-		if command.Command == "PUT" && isInactive(command.Hub.Attributes) {
+		if command.Command == "PUT" && flagged(command.Hub.Attributes) {
 			writes = append(writes, mongo.NewUpdateOneModel().
 				SetFilter(bson.M{"hub_id": id}).
 				SetUpdate(bson.M{"$set": HubInactive{HubId: id}}).
@@ -74,13 +98,13 @@ func (this *Controller) updateHubInactive(commands []model.HubCommand) error {
 			writes = append(writes, mongo.NewDeleteManyModel().SetFilter(bson.M{"hub_id": id}))
 		}
 	}
-	return bulkWrite(this.getHubInactiveCollection(), writes)
+	return bulkWrite(collection, writes)
 }
 
-// getHubInactiveIds loads the ids of all inactive hubs within ctx.
-func (this *Controller) getHubInactiveIds(ctx context.Context) (map[string]bool, error) {
+// getHubFlagIds loads the hub ids of a flag collection within ctx.
+func getHubFlagIds(ctx context.Context, collection *mongo.Collection) (map[string]bool, error) {
 	opts := options.Find().SetProjection(bson.M{"_id": 0, "hub_id": 1})
-	cursor, err := this.getHubInactiveCollection().Find(ctx, bson.M{}, opts)
+	cursor, err := collection.Find(ctx, bson.M{}, opts)
 	if err != nil {
 		return nil, err
 	}

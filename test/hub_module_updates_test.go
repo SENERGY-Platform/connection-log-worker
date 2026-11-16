@@ -299,6 +299,23 @@ func TestHubModuleUpdates(t *testing.T) {
 			}
 		})
 
+		t.Run("hub ignoring module updates", func(t *testing.T) {
+			t.Parallel()
+			id := "ignore-modules-hub"
+			sendReport(t, id, time.Now().Add(-3*time.Hour), list(module("github.com/x/a", "v2")))
+			eventually(t, 30*time.Second, func() bool { return hubReadCount(id) > 0 })
+			stay()
+			if got := notifier.forHub(id); len(got) != 0 {
+				t.Errorf("expected no notification, got %#v", got)
+			}
+			if n := hubReadCount(id); n != 1 {
+				t.Errorf("expected the hub to be read once, got %d", n)
+			}
+			if d := docs(t, id)["github.com/x/a"]; !d.Notified {
+				t.Errorf("expected the claim to stay, got %#v", d)
+			}
+		})
+
 		t.Run("unknown to the device-repository", func(t *testing.T) {
 			t.Parallel()
 			id := "unknown-hub-modules"
@@ -350,7 +367,7 @@ func TestHubModuleUpdates(t *testing.T) {
 		collector := control.HubHealthCollector()
 		clean := func(t *testing.T) {
 			t.Helper()
-			for _, c := range []*mongo.Collection{updates, healths, states, db.Collection(conf.HubInactiveCollection)} {
+			for _, c := range []*mongo.Collection{updates, healths, states, db.Collection(conf.HubInactiveCollection), db.Collection(conf.HubIgnoreModuleUpdatesCollection)} {
 				if _, err := c.DeleteMany(ctx, bson.M{}); err != nil {
 					t.Fatal(err)
 				}
@@ -395,6 +412,10 @@ connectionlog_worker_hub_health_missing{hub_id="gauge-missing"} 1
 		sendReport(t, "gauge-outdated", time.Now().Add(-3*time.Hour), list(module("github.com/x/a", "v2"), module("github.com/x/b", "v2")))
 		sendReport(t, "gauge-young", time.Now(), list(module("github.com/x/a", "v2")))
 		sendReport(t, "gauge-inactive", time.Now().Add(-3*time.Hour), list(module("github.com/x/a", "v2")))
+		if _, err := db.Collection(conf.HubIgnoreModuleUpdatesCollection).InsertOne(ctx, bson.M{"hub_id": "gauge-ignoring"}); err != nil {
+			t.Fatal(err)
+		}
+		sendReport(t, "gauge-ignoring", time.Now().Add(-3*time.Hour), list(module("github.com/x/a", "v2")))
 		expected = `
 # HELP connectionlog_worker_hub_modules_outdated number of modules per hub whose update has been pending for longer than HubModuleOutdatedAge; only hubs with at least one, not of inactive hubs
 # TYPE connectionlog_worker_hub_modules_outdated gauge
